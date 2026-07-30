@@ -536,6 +536,22 @@ function initMobileAndQR() {
     });
   });
 
+  // Native Mobile Photo Camera Capture Listeners
+  const snapBtn = document.getElementById('btn-mobile-snap-photo');
+  const fileCapture = document.getElementById('mobile-file-capture');
+
+  snapBtn?.addEventListener('click', () => {
+    fileCapture?.click();
+  });
+
+  fileCapture?.addEventListener('change', (e) => {
+    if (e.target.files && e.target.files[0]) {
+      if (window.faceEngine) {
+        window.faceEngine.processImageFile(e.target.files[0]);
+      }
+    }
+  });
+
   // QR Code Modal Open Buttons
   const qrButtons = [
     'btn-open-qr-modal',

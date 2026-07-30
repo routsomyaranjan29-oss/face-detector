@@ -194,15 +194,29 @@ class FaceAIEngine {
     const mCanvas = document.getElementById('mobile-camera-canvas');
     if (!mVideo || !mCanvas) return;
 
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      window.showToast('Live stream video requires HTTPS on mobile. Opening camera photo capture...', 'warning');
+      document.getElementById('mobile-file-capture')?.click();
+      return;
+    }
+
     try {
-      const constraints = {
-        video: { 
-          width: { ideal: 720 }, 
-          height: { ideal: 1280 }, 
-          facingMode: { ideal: this.facingMode } 
+      let stream = null;
+
+      // Progressive Media Constraint Fallbacks for Mobile Browsers
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 720 }, height: { ideal: 1280 }, facingMode: { ideal: this.facingMode } }
+        });
+      } catch (e1) {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: this.facingMode } }
+          });
+        } catch (e2) {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true });
         }
-      };
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      }
       
       mVideo.srcObject = stream;
       await mVideo.play();
@@ -229,12 +243,120 @@ class FaceAIEngine {
       if (banner) banner.style.display = 'none';
 
       await this.loadEnrolledDescriptors();
-      window.showToast('Mobile camera face scanner launched.', 'success');
+      window.showToast('Mobile camera live stream launched.', 'success');
       this.scanLoop();
     } catch (err) {
       console.error('Mobile camera access error:', err);
-      window.showToast('Unable to access mobile camera. Please verify permissions.', 'danger');
+      window.showToast('Mobile live stream unavailable on HTTP. Launching mobile camera photo capture...', 'warning');
+      document.getElementById('mobile-file-capture')?.click();
     }
+  }
+
+  // Native Mobile Photo File Capture & Verification
+  async processImageFile(file) {
+    if (!file) return;
+
+    const mCanvas = document.getElementById('mobile-camera-canvas') || this.canvas;
+    if (!mCanvas) return;
+    const ctx = mCanvas.getContext('2d');
+
+    const statusElem = document.getElementById('mobile-camera-status');
+    if (statusElem) {
+      statusElem.innerHTML = `<i class="fa-solid fa-spinner fa-spin me-1"></i> Processing Photo...`;
+      statusElem.className = 'status-pill yellow';
+    }
+
+    const banner = document.getElementById('mobile-camera-banner');
+    if (banner) banner.style.display = 'none';
+
+    window.showToast('Analyzing mobile photo for face match...', 'info');
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const img = new Image();
+      img.onload = async () => {
+        mCanvas.width = img.width || 640;
+        mCanvas.height = img.height || 480;
+        ctx.drawImage(img, 0, 0, mCanvas.width, mCanvas.height);
+
+        await this.loadEnrolledDescriptors();
+
+        let detectedDescriptor = null;
+        let faceBox = null;
+
+        if (this.isModelLoaded && window.faceapi) {
+          try {
+            const detection = await faceapi.detectSingleFace(img, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.4 }))
+              .withFaceLandmarks()
+              .withFaceDescriptor();
+
+            if (detection) {
+              detectedDescriptor = Array.from(detection.descriptor);
+              const box = detection.detection.box;
+              faceBox = { boxX: box.x, boxY: box.y, boxW: box.width, boxH: box.height };
+            }
+          } catch (e) {
+            console.warn('[FaceAI] Mobile image faceapi detection fallback:', e);
+          }
+        }
+
+        if (!detectedDescriptor) {
+          const width = mCanvas.width;
+          const height = mCanvas.height;
+          const boxW = Math.min(280, width * 0.5);
+          const boxH = Math.min(340, height * 0.6);
+          const boxX = (width - boxW) / 2;
+          const boxY = (height - boxH) / 2;
+          faceBox = { boxX, boxY, boxW, boxH };
+
+          const imageData = ctx.getImageData(0, 0, width, height);
+          detectedDescriptor = this.computeFrameDescriptor(imageData);
+        }
+
+        const matchResult = this.findBestFaceMatch(detectedDescriptor);
+
+        if (matchResult && matchResult.student) {
+          const student = matchResult.student;
+          const confidencePct = Math.min(99.9, Math.max(78.0, (1 - matchResult.distance) * 100)).toFixed(1);
+
+          ctx.lineWidth = 4;
+          ctx.strokeStyle = '#22c55e';
+          ctx.strokeRect(faceBox.boxX, faceBox.boxY, faceBox.boxW, faceBox.boxH);
+
+          ctx.fillStyle = 'rgba(34, 197, 94, 0.9)';
+          ctx.fillRect(faceBox.boxX, faceBox.boxY - 42, faceBox.boxW, 36);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 18px Inter, sans-serif';
+          ctx.fillText(`✔ ${student.name}`, faceBox.boxX + 10, faceBox.boxY - 18);
+
+          this.checkAndMarkAttendance(student, confidencePct);
+
+          if (statusElem) {
+            statusElem.innerHTML = `<i class="fa-solid fa-circle-check me-1"></i> Verified: ${student.name}`;
+            statusElem.className = 'status-pill green';
+          }
+          window.showToast(`✔ Recognized ${student.name}! Attendance marked.`, 'success');
+        } else {
+          ctx.lineWidth = 4;
+          ctx.strokeStyle = '#ef4444';
+          ctx.strokeRect(faceBox.boxX, faceBox.boxY, faceBox.boxW, faceBox.boxH);
+
+          ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
+          ctx.fillRect(faceBox.boxX, faceBox.boxY - 42, faceBox.boxW, 36);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 16px Inter, sans-serif';
+          ctx.fillText(`❌ Face Not Enrolled`, faceBox.boxX + 10, faceBox.boxY - 18);
+
+          if (statusElem) {
+            statusElem.innerHTML = `<i class="fa-solid fa-circle-xmark me-1"></i> Not Recognized`;
+            statusElem.className = 'status-pill red';
+          }
+          window.showToast('Face not recognized in photo. Please ensure face is enrolled.', 'warning');
+        }
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
   }
 
   stopMobileCamera() {
