@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { dbQuery, dbGet, dbRun } = require('../db/database');
+const { dispatchParentNotifications } = require('./notifications');
 
 let AttendanceModel = null;
 let StudentModel = null;
@@ -9,7 +10,7 @@ try {
   StudentModel = require('../models/Student');
 } catch (e) {}
 
-// POST /api/attendance/mark - Automatically mark attendance with duplicate prevention
+// POST /api/attendance/mark - Automatically mark attendance with duplicate prevention & Parent Notifications
 router.post('/mark', async (req, res) => {
   try {
     const { student_id, studentId, confidence, device, mode, location_lat, location_lng } = req.body;
@@ -51,7 +52,7 @@ router.post('/mark', async (req, res) => {
         return res.json({
           success: false,
           duplicate: true,
-          message: `Already Marked Present Today! ${student.name} (Roll ${student.rollNumber}) recorded at ${existingAttendance.time}.`,
+          message: `✅ Attendance already marked today at ${existingAttendance.time}`,
           student: {
             studentId: student.studentId,
             name: student.name,
@@ -78,11 +79,15 @@ router.post('/mark', async (req, res) => {
         locationLng: location_lng || null
       });
 
+      // Dispatch Email, WhatsApp, SMS notifications to Parent
+      const notificationResults = await dispatchParentNotifications(student, newLog);
+
       return res.json({
         success: true,
         duplicate: false,
         message: `Attendance Marked! ✔ ${student.name} (Roll ${student.rollNumber}) - ${status}`,
-        attendance: newLog
+        attendance: newLog,
+        notifications: notificationResults
       });
     }
 
@@ -106,7 +111,7 @@ router.post('/mark', async (req, res) => {
       return res.json({
         success: false,
         duplicate: true,
-        message: `Already Marked Present Today! ${student.name} (Roll ${student.roll_number}) recorded at ${existingLog.time}.`,
+        message: `✅ Attendance already marked today at ${existingLog.time}`,
         student: {
           studentId: student.student_id,
           student_id: student.student_id,
@@ -134,6 +139,25 @@ router.post('/mark', async (req, res) => {
       ]
     );
 
+    const attendanceObj = {
+      id: result.id,
+      studentId: student.student_id,
+      student_id: student.student_id,
+      name: student.name,
+      rollNumber: student.roll_number,
+      roll_number: student.roll_number,
+      branch: student.branch || student.department,
+      semester: student.semester || '1',
+      date: dateStr,
+      time: timeStr,
+      status,
+      device: device || mode || 'Webcam',
+      confidence: confidence || 98.5
+    };
+
+    // Dispatch Email, WhatsApp, SMS notifications to Parent
+    const notificationResults = await dispatchParentNotifications(student, attendanceObj);
+
     await dbRun(
       `INSERT INTO notifications (title, message, type) VALUES (?, ?, ?)`,
       ['Attendance Marked', `${student.name} (Roll ${student.roll_number}) marked ${status} at ${timeStr}`, 'success']
@@ -143,21 +167,8 @@ router.post('/mark', async (req, res) => {
       success: true,
       duplicate: false,
       message: `Attendance Marked! ✔ ${student.name} (Roll ${student.roll_number}) - ${status}`,
-      attendance: {
-        id: result.id,
-        studentId: student.student_id,
-        student_id: student.student_id,
-        name: student.name,
-        rollNumber: student.roll_number,
-        roll_number: student.roll_number,
-        branch: student.branch || student.department,
-        semester: student.semester || '1',
-        date: dateStr,
-        time: timeStr,
-        status,
-        device: device || 'Webcam',
-        confidence: confidence || 98.5
-      }
+      attendance: attendanceObj,
+      notifications: notificationResults
     });
   } catch (err) {
     console.error('Error marking attendance:', err);

@@ -113,7 +113,7 @@ router.get('/:student_id', async (req, res) => {
   }
 });
 
-// POST /api/students - Add new student with all 9 fields
+// POST /api/students - Add new student with complete details
 router.post('/', async (req, res) => {
   try {
     const { 
@@ -125,13 +125,23 @@ router.post('/', async (req, res) => {
       section, 
       mobile, phone,
       email, 
-      address 
+      address,
+      parentName, parent_name,
+      parentMobile, parent_mobile,
+      parentWhatsapp, parent_whatsapp,
+      parentEmail, parent_email,
+      emergencyContact, emergency_contact
     } = req.body;
 
     const rNum = rollNumber || roll_number;
     const regNum = registrationNumber || registration_number;
     const bName = branch || department;
     const mobNum = mobile || phone;
+    const pName = parentName || parent_name || '';
+    const pMob = parentMobile || parent_mobile || mobNum || '';
+    const pWhatsapp = parentWhatsapp || parent_whatsapp || pMob || '';
+    const pEmail = parentEmail || parent_email || email || '';
+    const eContact = emergencyContact || emergency_contact || pMob || '';
     const sId = req.body.studentId || req.body.student_id || `STU-${rNum || Date.now()}`;
 
     if (!name || !rNum || !bName) {
@@ -159,7 +169,12 @@ router.post('/', async (req, res) => {
         section: section || 'A',
         mobile: mobNum || '',
         email: email || '',
-        address: address || ''
+        address: address || '',
+        parentName: pName,
+        parentMobile: pMob,
+        parentWhatsapp: pWhatsapp,
+        parentEmail: pEmail,
+        emergencyContact: eContact
       });
 
       return res.status(201).json({
@@ -176,14 +191,14 @@ router.post('/', async (req, res) => {
     }
 
     const result = await dbRun(
-      `INSERT INTO students (student_id, name, roll_number, registration_number, branch, department, semester, section, mobile, phone, email, address, face_enrolled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
-      [sId, name, rNum, regNum || `REG-${rNum}`, bName, bName, semester || 'Semester 1', section || 'A', mobNum || '', mobNum || '', email || '', address || '']
+      `INSERT INTO students (student_id, name, roll_number, registration_number, branch, department, semester, section, mobile, phone, email, address, parent_name, parent_mobile, parent_whatsapp, parent_email, emergency_contact, face_enrolled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+      [sId, name, rNum, regNum || `REG-${rNum}`, bName, bName, semester || 'Semester 1', section || 'A', mobNum || '', mobNum || '', email || '', address || '', pName, pMob, pWhatsapp, pEmail, eContact]
     );
 
     res.status(201).json({
       success: true,
       message: 'Student registered successfully!',
-      student: { id: result.id, student_id: sId, studentId: sId, name, roll_number: rNum, rollNumber: rNum, branch: bName }
+      student: { id: result.id, student_id: sId, studentId: sId, name, roll_number: rNum, rollNumber: rNum, branch: bName, parent_name: pName }
     });
   } catch (err) {
     console.error('Error adding student:', err);

@@ -220,6 +220,11 @@
             <i class="fa-solid fa-clock-rotate-left"></i>
             <span>Attendance History</span>
           </button>
+          <button class="nav-link" data-tab="notifications">
+            <i class="fa-solid fa-bell-concierge text-warning"></i>
+            <span>Parent Notifications</span>
+            <span class="badge-mini bg-accent ms-auto">Auto</span>
+          </button>
           <button class="nav-link" data-tab="settings">
             <i class="fa-solid fa-sliders"></i>
             <span>System Settings</span>
@@ -668,10 +673,113 @@
                     <th>Status</th>
                     <th>Device</th>
                     <th>Confidence</th>
+                    <th>Parent Alert</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
                 <tbody id="history-table-body">
                   <!-- Populated via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- 5. PARENT NOTIFICATION DASHBOARD MODULE -->
+        <section id="view-notifications" class="tab-view">
+          <div class="view-header">
+            <div>
+              <h2 class="view-title">Parent Notification Hub</h2>
+              <p class="view-subtitle">Monitor automated Email, WhatsApp, and SMS alerts sent to parents upon student arrival.</p>
+            </div>
+            <div class="d-flex gap-2">
+              <button class="btn btn-secondary" id="btn-refresh-notif-hub">
+                <i class="fa-solid fa-rotate-right me-1"></i> Refresh Logs
+              </button>
+              <button class="btn btn-primary" id="btn-export-notif-csv">
+                <i class="fa-solid fa-file-csv me-1"></i> Export Logs
+              </button>
+            </div>
+          </div>
+
+          <!-- KPI Metrics Cards -->
+          <div class="kpi-grid mb-4">
+            <div class="kpi-card glass-card">
+              <div class="kpi-icon bg-accent-light"><i class="fa-solid fa-paper-plane text-accent"></i></div>
+              <div class="kpi-content">
+                <span class="kpi-label">Total Sent Today</span>
+                <h3 class="kpi-value" id="notif-stat-total">0</h3>
+                <span class="kpi-subtext text-success"><i class="fa-solid fa-check me-1"></i> Automated Dispatches</span>
+              </div>
+            </div>
+
+            <div class="kpi-card glass-card">
+              <div class="kpi-icon bg-info-light"><i class="fa-solid fa-envelope text-info"></i></div>
+              <div class="kpi-content">
+                <span class="kpi-label">Email Success</span>
+                <h3 class="kpi-value text-info" id="notif-stat-email">0</h3>
+                <span class="kpi-subtext text-muted">HTML Entry Confirmations</span>
+              </div>
+            </div>
+
+            <div class="kpi-card glass-card">
+              <div class="kpi-icon bg-success-light"><i class="fa-brands fa-whatsapp text-success"></i></div>
+              <div class="kpi-content">
+                <span class="kpi-label">WhatsApp Success</span>
+                <h3 class="kpi-value text-success" id="notif-stat-whatsapp">0</h3>
+                <span class="kpi-subtext text-muted">Instant Chat Alerts</span>
+              </div>
+            </div>
+
+            <div class="kpi-card glass-card">
+              <div class="kpi-icon bg-warning-light"><i class="fa-solid fa-comment-sms text-warning"></i></div>
+              <div class="kpi-content">
+                <span class="kpi-label">SMS Success</span>
+                <h3 class="kpi-value text-warning" id="notif-stat-sms">0</h3>
+                <span class="kpi-subtext text-muted">Text Message Delivery</span>
+              </div>
+            </div>
+
+            <div class="kpi-card glass-card">
+              <div class="kpi-icon bg-danger-light"><i class="fa-solid fa-triangle-exclamation text-danger"></i></div>
+              <div class="kpi-content">
+                <span class="kpi-label">Failed Alerts</span>
+                <h3 class="kpi-value text-danger" id="notif-stat-failed">0</h3>
+                <span class="kpi-subtext text-danger"><i class="fa-solid fa-redo me-1"></i> Resend Eligible</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Notification History Table -->
+          <div class="glass-card table-card">
+            <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+              <h5 class="mb-0"><i class="fa-solid fa-list-check text-accent me-2"></i> Recent Parent Notification Logs</h5>
+              <div class="d-flex gap-2">
+                <select id="notif-channel-filter" class="form-control form-control-sm" style="width: 140px;">
+                  <option value="All">All Channels</option>
+                  <option value="Email">Email</option>
+                  <option value="WhatsApp">WhatsApp</option>
+                  <option value="SMS">SMS</option>
+                </select>
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table class="custom-table" id="notif-logs-table">
+                <thead>
+                  <tr>
+                    <th>Date & Time</th>
+                    <th>Student Name</th>
+                    <th>Parent Name</th>
+                    <th>Channel</th>
+                    <th>Contact Info</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="notif-table-body">
+                  <tr>
+                    <td colspan="7" class="text-center text-muted p-4">Loading parent notification logs...</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -713,6 +821,49 @@
                   <label class="form-check-label fw-bold" for="setting-sound-alerts">Audio Feedback Chime</label>
                   <span class="text-muted small d-block">Plays success tone when attendance is marked successfully.</span>
                 </div>
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="glass-card p-4">
+                <h5 class="mb-3"><i class="fa-solid fa-bell me-2 text-warning"></i> Parent Notification Channels & Credentials</h5>
+                
+                <div class="form-check form-switch mb-3">
+                  <input class="form-check-input" type="checkbox" id="setting-toggle-email" checked>
+                  <label class="form-check-label fw-bold" for="setting-toggle-email">Enable Email Notifications</label>
+                  <span class="text-muted small d-block">Sends HTML attendance receipt to Parent Email on entry.</span>
+                </div>
+
+                <div class="form-check form-switch mb-3">
+                  <input class="form-check-input" type="checkbox" id="setting-toggle-whatsapp" checked>
+                  <label class="form-check-label fw-bold" for="setting-toggle-whatsapp">Enable WhatsApp Notifications</label>
+                  <span class="text-muted small d-block">Sends instant WhatsApp template to Parent WhatsApp number.</span>
+                </div>
+
+                <div class="form-check form-switch mb-4">
+                  <input class="form-check-input" type="checkbox" id="setting-toggle-sms" checked>
+                  <label class="form-check-label fw-bold" for="setting-toggle-sms">Enable SMS Notifications</label>
+                  <span class="text-muted small d-block">Sends Twilio / SMS Gateway text message to Parent Mobile.</span>
+                </div>
+
+                <div class="form-group mb-2">
+                  <label class="form-label small">SMTP Email Account</label>
+                  <input type="text" id="setting-smtp-user" class="form-control form-control-sm" value="notifications@institution.edu" placeholder="SMTP Username/Email" />
+                </div>
+
+                <div class="form-group mb-2">
+                  <label class="form-label small">Twilio SMS Account SID</label>
+                  <input type="text" id="setting-twilio-sid" class="form-control form-control-sm" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxx" />
+                </div>
+
+                <div class="form-group mb-3">
+                  <label class="form-label small">WhatsApp Business API Key</label>
+                  <input type="password" id="setting-whatsapp-key" class="form-control form-control-sm" placeholder="••••••••••••••••" />
+                </div>
+
+                <button class="btn btn-warning w-100 btn-sm" id="btn-save-notif-settings">
+                  <i class="fa-solid fa-floppy-disk me-1"></i> Save Notification Credentials
+                </button>
               </div>
             </div>
 
@@ -818,6 +969,31 @@
                 <div class="col-md-6">
                   <label class="form-label">Address (Optional)</label>
                   <input type="text" id="reg-address" class="form-control" placeholder="e.g. New Delhi, India" />
+                </div>
+
+                <!-- PARENT & GUARDIAN CONTACT SECTION FOR AUTOMATED NOTIFICATIONS -->
+                <div class="col-12 mt-3 mb-1">
+                  <h6 class="text-accent fw-bold border-bottom pb-1 mb-0"><i class="fa-solid fa-users me-2"></i> Parent & Guardian Contact Info (Automated Notifications)</h6>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Parent / Guardian Name *</label>
+                  <input type="text" id="reg-parent-name" class="form-control" placeholder="e.g. Mr. Ramesh Kumar" required />
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label">Parent Mobile Number *</label>
+                  <input type="tel" id="reg-parent-mobile" class="form-control" placeholder="+91 9876543210" required />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Parent WhatsApp Number *</label>
+                  <input type="tel" id="reg-parent-whatsapp" class="form-control" placeholder="+91 9876543210" required />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Parent Email Address *</label>
+                  <input type="email" id="reg-parent-email" class="form-control" placeholder="parent@gmail.com" required />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label">Emergency Contact (Optional)</label>
+                  <input type="tel" id="reg-emergency-contact" class="form-control" placeholder="+91 9876543210" />
                 </div>
               </div>
             </form>

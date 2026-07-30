@@ -38,7 +38,7 @@ const studentRoutes = require('./routes/students');
 const faceRoutes = require('./routes/face');
 const attendanceRoutes = require('./routes/attendance');
 const reportRoutes = require('./routes/reports');
-const notificationRoutes = require('./routes/notifications');
+const { router: notificationRoutes } = require('./routes/notifications');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/students', studentRoutes);

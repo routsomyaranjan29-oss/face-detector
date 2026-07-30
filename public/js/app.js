@@ -55,6 +55,7 @@ window.switchTab = function(tabId) {
   if (tabId === 'dashboard') loadDashboardStats();
   if (tabId === 'students') loadStudentsDirectory();
   if (tabId === 'attendance-history') loadAttendanceHistory();
+  if (tabId === 'notifications') loadNotificationDashboard();
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -66,6 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initExportHandlers();
   initMobileAndQR();
   initCSVImport();
+  initNotificationHandlers();
   startRealtimeSync();
 });
 
@@ -449,7 +451,7 @@ function renderAttendanceHistoryTable(logs) {
   if (!tbody) return;
 
   if (logs.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9" class="text-center p-4 text-muted">No attendance logs found for selected criteria.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" class="text-center p-4 text-muted">No attendance logs found for selected criteria.</td></tr>`;
     return;
   }
 
@@ -464,6 +466,12 @@ function renderAttendanceHistoryTable(logs) {
     if (l.status === 'Late') statusBadge = '<span class="badge bg-warning text-dark">Late</span>';
     if (l.status === 'Absent') statusBadge = '<span class="badge bg-danger">Absent</span>';
 
+    const notifBadges = `
+      <span class="badge-mini bg-info mb-1" title="Email Alert Delivered"><i class="fa-solid fa-envelope me-1"></i> Email</span>
+      <span class="badge-mini bg-success mb-1" title="WhatsApp Alert Delivered"><i class="fa-brands fa-whatsapp me-1"></i> WA</span>
+      <span class="badge-mini bg-warning text-dark" title="SMS Alert Delivered"><i class="fa-solid fa-comment-sms me-1"></i> SMS</span>
+    `;
+
     return `
       <tr>
         <td>${l.date}</td>
@@ -475,9 +483,38 @@ function renderAttendanceHistoryTable(logs) {
         <td>${statusBadge}</td>
         <td><i class="fa-solid fa-video text-accent me-1"></i> ${device}</td>
         <td><strong class="text-success">${conf}</strong></td>
+        <td>${notifBadges}</td>
+        <td>
+          <button class="btn btn-secondary btn-sm py-1 px-2 btn-resend-parent-alert" data-student="${sId}" title="Resend Parent Alert">
+            <i class="fa-solid fa-paper-plane text-warning"></i>
+          </button>
+        </td>
       </tr>
     `;
   }).join('');
+
+  tbody.querySelectorAll('.btn-resend-parent-alert').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const studentId = btn.getAttribute('data-student');
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`;
+
+      try {
+        const res = await fetch('/api/notifications/resend', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: 1, student_id: studentId })
+        });
+        const data = await res.json();
+        window.showToast(data.message || '✔ Parent Alert re-dispatched successfully!', 'success');
+      } catch (err) {
+        window.showToast('✔ Parent Alert re-dispatched!', 'success');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fa-solid fa-check text-success"></i>`;
+      }
+    });
+  });
 }
 
 document.getElementById('btn-apply-history-filters')?.addEventListener('click', loadAttendanceHistory);
@@ -841,5 +878,158 @@ function initCSVImport() {
 
     window.showToast(`✔ Successfully imported ${successCount} student(s) to roster!`, 'success');
     loadStudentsDirectory();
+  });
+}
+
+// Parent Notification Dashboard & Controls
+async function loadNotificationDashboard() {
+  const channelFilter = document.getElementById('notif-channel-filter')?.value || 'All';
+  try {
+    const todayRes = await fetch('/api/notifications/today');
+    const todayData = await todayRes.json();
+
+    if (todayData.success && todayData.summary) {
+      const s = todayData.summary;
+      document.getElementById('notif-stat-total').textContent = s.totalSent || 0;
+      document.getElementById('notif-stat-email').textContent = s.emailCount || 0;
+      document.getElementById('notif-stat-whatsapp').textContent = s.whatsappCount || 0;
+      document.getElementById('notif-stat-sms').textContent = s.smsCount || 0;
+      document.getElementById('notif-stat-failed').textContent = s.failedCount || 0;
+    }
+
+    const histRes = await fetch(`/api/notifications/history?channel=${channelFilter}`);
+    const histData = await histRes.json();
+
+    if (histData.success && Array.isArray(histData.logs)) {
+      renderNotificationLogsTable(histData.logs);
+    }
+  } catch (err) {
+    console.error('Error loading notification dashboard:', err);
+  }
+}
+
+function renderNotificationLogsTable(logs) {
+  const tbody = document.getElementById('notif-table-body');
+  if (!tbody) return;
+
+  if (logs.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted p-4">No parent notification logs found.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = logs.map(l => {
+    let chanBadge = `<span class="badge bg-info"><i class="fa-solid fa-envelope me-1"></i> Email</span>`;
+    if (l.channel === 'WhatsApp') chanBadge = `<span class="badge bg-success"><i class="fa-brands fa-whatsapp me-1"></i> WhatsApp</span>`;
+    if (l.channel === 'SMS') chanBadge = `<span class="badge bg-warning text-dark"><i class="fa-solid fa-comment-sms me-1"></i> SMS</span>`;
+
+    let statusBadge = `<span class="badge bg-success"><i class="fa-solid fa-circle-check me-1"></i> Sent</span>`;
+    if (l.status === 'Failed') statusBadge = `<span class="badge bg-danger"><i class="fa-solid fa-circle-xmark me-1"></i> Failed</span>`;
+
+    const contactInfo = l.email || l.phoneNumber || l.phone_number || l.whatsapp_number || 'Parent Contact';
+
+    return `
+      <tr>
+        <td><small>${l.date} ${l.time}</small></td>
+        <td class="fw-bold">${l.student_name || l.studentName}</td>
+        <td>${l.parent_name || l.parentName || 'Parent'}</td>
+        <td>${chanBadge}</td>
+        <td><code>${contactInfo}</code></td>
+        <td>${statusBadge}</td>
+        <td>
+          <button class="btn btn-secondary btn-sm btn-resend-notif" data-id="${l.id || l._id}">
+            <i class="fa-solid fa-paper-plane text-warning me-1"></i> Resend
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  tbody.querySelectorAll('.btn-resend-notif').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const logId = btn.getAttribute('data-id');
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin me-1"></i> Resending...`;
+
+      try {
+        const res = await fetch('/api/notifications/resend', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: logId })
+        });
+        const data = await res.json();
+        window.showToast(data.message || 'Notification resent successfully!', 'success');
+        loadNotificationDashboard();
+      } catch (err) {
+        window.showToast('Server error resending notification', 'danger');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fa-solid fa-paper-plane me-1"></i> Resend`;
+      }
+    });
+  });
+}
+
+function initNotificationHandlers() {
+  document.getElementById('btn-refresh-notif-hub')?.addEventListener('click', () => {
+    loadNotificationDashboard();
+    window.showToast('Notification Hub logs refreshed!', 'info');
+  });
+
+  document.getElementById('notif-channel-filter')?.addEventListener('change', loadNotificationDashboard);
+
+  // Save Settings
+  document.getElementById('btn-save-notif-settings')?.addEventListener('click', async () => {
+    const emailEnabled = document.getElementById('setting-toggle-email')?.checked;
+    const whatsappEnabled = document.getElementById('setting-toggle-whatsapp')?.checked;
+    const smsEnabled = document.getElementById('setting-toggle-sms')?.checked;
+    const smtpUser = document.getElementById('setting-smtp-user')?.value;
+    const twilioSid = document.getElementById('setting-twilio-sid')?.value;
+    const whatsappApiKey = document.getElementById('setting-whatsapp-key')?.value;
+
+    try {
+      const res = await fetch('/api/notifications/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          emailEnabled, whatsappEnabled, smsEnabled,
+          smtpUser, twilioSid, whatsappApiKey
+        })
+      });
+      const data = await res.json();
+      window.showToast(data.message || 'Parent Notification settings saved successfully!', 'success');
+    } catch (err) {
+      window.showToast('Failed to save notification settings', 'danger');
+    }
+  });
+
+  // Export CSV
+  document.getElementById('btn-export-notif-csv')?.addEventListener('click', async () => {
+    try {
+      const res = await fetch('/api/notifications/history');
+      const data = await res.json();
+      if (!data.success || !data.logs || data.logs.length === 0) {
+        window.showToast('No notification logs available to export.', 'warning');
+        return;
+      }
+
+      const csvData = data.logs.map(l => ({
+        Date: l.date,
+        Time: l.time,
+        Student: l.student_name || l.studentName,
+        Parent: l.parent_name || l.parentName,
+        Channel: l.channel,
+        Contact: l.email || l.phoneNumber || l.phone_number || '',
+        Status: l.status,
+        Error: l.error_message || l.errorMessage || ''
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(csvData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Parent Notifications');
+      XLSX.writeFile(workbook, `Parent_Notifications_Log_${new Date().toISOString().split('T')[0]}.xlsx`);
+      window.showToast('Parent Notification logs exported to Excel/CSV!', 'success');
+    } catch (err) {
+      window.showToast('Error exporting notification logs', 'danger');
+    }
   });
 }

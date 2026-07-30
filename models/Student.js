@@ -11,6 +11,11 @@ const studentSchema = new mongoose.Schema({
   mobile: { type: String, required: true },
   email: { type: String, required: true },
   address: { type: String, default: '' },
+  parentName: { type: String, default: '' },
+  parentMobile: { type: String, default: '' },
+  parentWhatsapp: { type: String, default: '' },
+  parentEmail: { type: String, default: '' },
+  emergencyContact: { type: String, default: '' },
   photoPath: { type: String, default: '' },
   posePhotos: [{ type: String }],
   faceEncoding: [{ type: Number }], // Array of numbers representing face descriptor

@@ -571,15 +571,21 @@ class FaceAIEngine {
         this.showRecognitionOverlay(student.name, `Roll: ${student.rollNumber || student.roll_number} | ${student.branch}`, data.attendance.status, data.attendance.time, false);
         window.showToast(`✔ Attendance Marked: ${student.name} (${data.attendance.status})`, 'success');
         
+        if (data.notifications) {
+          setTimeout(() => {
+            window.showToast(`📧 Parent Email, 📱 WhatsApp & 📩 SMS alerts sent!`, 'info');
+          }, 600);
+        }
+
         // Add item to Live Attendance Feed right sidebar
         this.addLiveFeedItem(student.name, student.rollNumber || student.roll_number, student.branch, data.attendance.time, data.attendance.status);
 
         if (window.loadDashboardStats) window.loadDashboardStats();
 
       } else if (data.duplicate) {
-        // Strict Duplicate Prevention Alert
+        // Strict Duplicate Prevention Alert (No Duplicate Notifications)
         this.showRecognitionOverlay(student.name, `Roll: ${student.rollNumber || student.roll_number} | ${student.branch}`, 'ALREADY MARKED TODAY', '', true);
-        window.showToast(data.message, 'warning');
+        window.showToast(data.message || `✅ Attendance already marked today for ${student.name}`, 'warning');
       }
     } catch (err) {
       console.error('Attendance mark API error:', err);

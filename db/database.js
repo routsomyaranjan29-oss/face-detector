@@ -119,8 +119,20 @@ async function initDatabase() {
         if (!colNames.includes('address')) {
           db.run("ALTER TABLE students ADD COLUMN address TEXT");
         }
-        if (!colNames.includes('photo_path')) {
-          db.run("ALTER TABLE students ADD COLUMN photo_path TEXT");
+        if (!colNames.includes('parent_name')) {
+          db.run("ALTER TABLE students ADD COLUMN parent_name TEXT");
+        }
+        if (!colNames.includes('parent_mobile')) {
+          db.run("ALTER TABLE students ADD COLUMN parent_mobile TEXT");
+        }
+        if (!colNames.includes('parent_whatsapp')) {
+          db.run("ALTER TABLE students ADD COLUMN parent_whatsapp TEXT");
+        }
+        if (!colNames.includes('parent_email')) {
+          db.run("ALTER TABLE students ADD COLUMN parent_email TEXT");
+        }
+        if (!colNames.includes('emergency_contact')) {
+          db.run("ALTER TABLE students ADD COLUMN emergency_contact TEXT");
         }
 
         // Face Embeddings Table
@@ -160,6 +172,28 @@ async function initDatabase() {
             title TEXT NOT NULL,
             message TEXT NOT NULL,
             type TEXT DEFAULT 'info',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+
+        // Detailed Parent Notifications Table (Email, WhatsApp, SMS)
+        db.run(`
+          CREATE TABLE IF NOT EXISTS parent_notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id TEXT NOT NULL,
+            student_name TEXT NOT NULL,
+            parent_name TEXT,
+            email TEXT,
+            phone_number TEXT,
+            whatsapp_number TEXT,
+            channel TEXT NOT NULL,
+            subject TEXT,
+            message TEXT NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('Sent', 'Failed', 'Pending')),
+            error_message TEXT,
+            date TEXT NOT NULL,
+            time TEXT NOT NULL,
+            timestamp INTEGER NOT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
           )
         `);
