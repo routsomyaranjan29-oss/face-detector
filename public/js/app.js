@@ -626,8 +626,8 @@ function initMobileAndQR() {
   }
 }
 
-// Generate Dynamic QR Code helper
-function openAttendanceQRModal() {
+// Generate Dynamic QR Code helper with LAN network IP detection
+async function openAttendanceQRModal() {
   const modal = document.getElementById('modal-qr-code');
   const qrContainer = document.getElementById('qrcode-container');
   const urlElem = document.getElementById('qr-target-url');
@@ -636,10 +636,20 @@ function openAttendanceQRModal() {
   // Clear previous QR code
   qrContainer.innerHTML = '';
 
-  // Determine current host origin URL for mobile scanning
-  const host = window.location.host;
-  const protocol = window.location.protocol;
-  const mobileUrl = `${protocol}//${host}?mode=mobile`;
+  let mobileUrl = `${window.location.protocol}//${window.location.host}?mode=mobile`;
+
+  // Fetch local LAN IP from server endpoint so phone camera can scan over Wi-Fi
+  try {
+    const res = await fetch('/api/info');
+    const data = await res.json();
+    if (data.success && data.localIp && data.localIp !== '127.0.0.1') {
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        mobileUrl = `http://${data.localIp}:${data.port || 3000}?mode=mobile`;
+      }
+    }
+  } catch (err) {
+    console.warn('[QR] Could not fetch server network IP, using current host URL.');
+  }
 
   if (urlElem) urlElem.textContent = mobileUrl;
 
