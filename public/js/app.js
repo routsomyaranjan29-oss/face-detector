@@ -65,6 +65,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initModals();
   initExportHandlers();
   initMobileAndQR();
+  initCSVImport();
+  startRealtimeSync();
 });
 
 // Live Clock Initializer
@@ -99,24 +101,58 @@ function initAuth() {
     appContainer.classList.add('hidden');
   }
 
-  // Auth Mode Switcher (Login vs Sign Up)
+  // Auth Mode Switcher (Login vs Student Check-In vs Sign Up)
   const tabLogin = document.getElementById('tab-btn-login');
+  const tabStudent = document.getElementById('tab-btn-student');
   const tabSignup = document.getElementById('tab-btn-signup');
   const formLogin = document.getElementById('form-login');
+  const formStudent = document.getElementById('form-student-portal');
   const formSignup = document.getElementById('form-signup');
 
   tabLogin?.addEventListener('click', () => {
     tabLogin.classList.add('active');
-    tabSignup.classList.remove('active');
-    formLogin.classList.remove('hidden');
-    formSignup.classList.add('hidden');
+    tabStudent?.classList.remove('active');
+    tabSignup?.classList.remove('active');
+    formLogin?.classList.remove('hidden');
+    formStudent?.classList.add('hidden');
+    formSignup?.classList.add('hidden');
+  });
+
+  tabStudent?.addEventListener('click', () => {
+    tabStudent.classList.add('active');
+    tabLogin?.classList.remove('active');
+    tabSignup?.classList.remove('active');
+    formStudent?.classList.remove('hidden');
+    formLogin?.classList.add('hidden');
+    formSignup?.classList.add('hidden');
   });
 
   tabSignup?.addEventListener('click', () => {
     tabSignup.classList.add('active');
-    tabLogin.classList.remove('active');
-    formSignup.classList.remove('hidden');
-    formLogin.classList.add('hidden');
+    tabLogin?.classList.remove('active');
+    tabStudent?.classList.remove('active');
+    formSignup?.classList.remove('hidden');
+    formLogin?.classList.add('hidden');
+    formStudent?.classList.add('hidden');
+  });
+
+  // Student Self Check-In Portal Submit
+  formStudent?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const roll = document.getElementById('student-portal-roll')?.value.trim();
+    if (!roll) return;
+
+    appState.token = 'student-guest-token';
+    appState.user = { name: `Student (Roll #${roll})`, role: 'Student' };
+
+    loginScreen.classList.add('hidden');
+    appContainer.classList.remove('hidden');
+    document.getElementById('current-user-name').textContent = appState.user.name;
+
+    window.switchTab('mobile-attendance');
+    const input = document.getElementById('mobile-roll-input');
+    if (input) input.value = roll;
+    window.showToast(`Welcome! Launching mobile attendance scanner for Roll #${roll}`, 'success');
   });
 
   // Login Submit
@@ -686,4 +722,124 @@ async function openAttendanceQRModal() {
   }
 
   modal.classList.add('show');
+}
+
+// Multi-Device Real-Time Sync Polling
+function startRealtimeSync() {
+  setInterval(async () => {
+    if (!appState.token && !appState.user) return;
+    try {
+      const res = await fetch('/api/attendance/today');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.logs)) {
+        if (data.logs.length !== appState.attendanceLogs.length) {
+          appState.attendanceLogs = data.logs;
+          updateDashboardCounters(data.summary || {});
+          updateLiveFeed(data.logs);
+        }
+      }
+    } catch (e) {}
+  }, 3000);
+}
+
+// Bulk Student Roster CSV/Excel Import Handler
+function initCSVImport() {
+  const modal = document.getElementById('modal-csv-import');
+  const openBtn = document.getElementById('btn-open-csv-modal');
+  const fileInput = document.getElementById('csv-file-input');
+  const previewBox = document.getElementById('csv-preview-box');
+  const previewText = document.getElementById('csv-preview-text');
+  const submitBtn = document.getElementById('btn-submit-csv-import');
+
+  let parsedStudents = [];
+
+  openBtn?.addEventListener('click', () => {
+    modal?.classList.add('show');
+  });
+
+  fileInput?.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    parsedStudents = [];
+    const fileName = file.name.toLowerCase();
+
+    if (fileName.endsWith('.csv')) {
+      const text = await file.text();
+      const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      if (lines.length > 1) {
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i].split(',').map(c => c.trim());
+          if (cols.length >= 2) {
+            parsedStudents.push({
+              name: cols[0] || `Student ${i}`,
+              roll_number: cols[1] || `${100 + i}`,
+              registration_number: cols[2] || `REG-${cols[1] || i}`,
+              branch: cols[3] || 'Computer Science',
+              semester: cols[4] || 'Semester 1',
+              mobile: cols[5] || ''
+            });
+          }
+        }
+      }
+    } else if (window.XLSX && (fileName.endsWith('.xlsx') || fileName.endsWith('.xls'))) {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheetName = workbook.SheetNames[0];
+      const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+      parsedStudents = rows.map((r, idx) => ({
+        name: r.Name || r.name || `Student ${idx + 1}`,
+        roll_number: r.RollNumber || r.roll_number || r.Roll || `${100 + idx}`,
+        registration_number: r.RegNumber || r.registration_number || `REG-${idx + 1}`,
+        branch: r.Branch || r.branch || 'Computer Science',
+        semester: r.Semester || r.semester || 'Semester 1',
+        mobile: r.Mobile || r.mobile || ''
+      }));
+    }
+
+    if (parsedStudents.length > 0) {
+      if (previewText) previewText.textContent = `Found ${parsedStudents.length} student records ready for import.`;
+      previewBox?.classList.remove('hidden');
+    } else {
+      window.showToast('No valid student rows found in file.', 'warning');
+    }
+  });
+
+  submitBtn?.addEventListener('click', async () => {
+    if (parsedStudents.length === 0) {
+      window.showToast('Please select a valid CSV or Excel file first.', 'warning');
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin me-2"></i> Importing ${parsedStudents.length} Students...`;
+
+    let successCount = 0;
+    for (const student of parsedStudents) {
+      try {
+        const res = await fetch('/api/students', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            student_id: student.roll_number,
+            name: student.name,
+            roll_number: student.roll_number,
+            registration_number: student.registration_number,
+            branch: student.branch,
+            semester: student.semester,
+            mobile: student.mobile
+          })
+        });
+        const data = await res.json();
+        if (data.success) successCount++;
+      } catch (e) {}
+    }
+
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = `<i class="fa-solid fa-upload me-2"></i> Import Roster`;
+    modal?.classList.remove('show');
+
+    window.showToast(`✔ Successfully imported ${successCount} student(s) to roster!`, 'success');
+    loadStudentsDirectory();
+  });
 }

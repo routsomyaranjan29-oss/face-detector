@@ -252,7 +252,6 @@ class FaceAIEngine {
     }
   }
 
-  // Native Mobile Photo File Capture & Verification
   async processImageFile(file) {
     if (!file) return;
 
@@ -269,7 +268,7 @@ class FaceAIEngine {
     const banner = document.getElementById('mobile-camera-banner');
     if (banner) banner.style.display = 'none';
 
-    window.showToast('Analyzing mobile photo for face match...', 'info');
+    window.showToast('Analyzing mobile photo for multi-face match...', 'info');
 
     const reader = new FileReader();
     reader.onload = async (event) => {
@@ -281,78 +280,80 @@ class FaceAIEngine {
 
         await this.loadEnrolledDescriptors();
 
-        let detectedDescriptor = null;
-        let faceBox = null;
+        let detectedFaces = [];
 
         if (this.isModelLoaded && window.faceapi) {
           try {
-            const detection = await faceapi.detectSingleFace(img, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.4 }))
+            const detections = await faceapi.detectAllFaces(img, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.4 }))
               .withFaceLandmarks()
-              .withFaceDescriptor();
+              .withFaceDescriptors();
 
-            if (detection) {
-              detectedDescriptor = Array.from(detection.descriptor);
-              const box = detection.detection.box;
-              faceBox = { boxX: box.x, boxY: box.y, boxW: box.width, boxH: box.height };
+            if (detections && detections.length > 0) {
+              detectedFaces = detections.map(d => ({
+                descriptor: Array.from(d.descriptor),
+                boxX: d.detection.box.x,
+                boxY: d.detection.box.y,
+                boxW: d.detection.box.width,
+                boxH: d.detection.box.height
+              }));
             }
           } catch (e) {
-            console.warn('[FaceAI] Mobile image faceapi detection fallback:', e);
+            console.warn('[FaceAI] Mobile image multi-face detection fallback:', e);
           }
         }
 
-        if (!detectedDescriptor) {
+        if (detectedFaces.length === 0) {
           const width = mCanvas.width;
           const height = mCanvas.height;
           const boxW = Math.min(280, width * 0.5);
           const boxH = Math.min(340, height * 0.6);
           const boxX = (width - boxW) / 2;
           const boxY = (height - boxH) / 2;
-          faceBox = { boxX, boxY, boxW, boxH };
 
           const imageData = ctx.getImageData(0, 0, width, height);
-          detectedDescriptor = this.computeFrameDescriptor(imageData);
+          const desc = this.computeFrameDescriptor(imageData);
+          detectedFaces = [{ descriptor: desc, boxX, boxY, boxW, boxH }];
         }
 
-        const matchResult = this.findBestFaceMatch(detectedDescriptor);
+        let recognizedCount = 0;
+        for (const face of detectedFaces) {
+          const { descriptor, boxX, boxY, boxW, boxH } = face;
+          const matchResult = this.findBestFaceMatch(descriptor);
 
-        if (matchResult && matchResult.student) {
-          const student = matchResult.student;
-          const confidencePct = Math.min(99.9, Math.max(78.0, (1 - matchResult.distance) * 100)).toFixed(1);
+          if (matchResult && matchResult.student) {
+            recognizedCount++;
+            const student = matchResult.student;
+            const confidencePct = Math.min(99.9, Math.max(78.0, (1 - matchResult.distance) * 100)).toFixed(1);
 
-          ctx.lineWidth = 4;
-          ctx.strokeStyle = '#22c55e';
-          ctx.strokeRect(faceBox.boxX, faceBox.boxY, faceBox.boxW, faceBox.boxH);
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = '#22c55e';
+            ctx.strokeRect(boxX, boxY, boxW, boxH);
 
-          ctx.fillStyle = 'rgba(34, 197, 94, 0.9)';
-          ctx.fillRect(faceBox.boxX, faceBox.boxY - 42, faceBox.boxW, 36);
-          ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 18px Inter, sans-serif';
-          ctx.fillText(`✔ ${student.name}`, faceBox.boxX + 10, faceBox.boxY - 18);
+            ctx.fillStyle = 'rgba(34, 197, 94, 0.9)';
+            ctx.fillRect(boxX, boxY - 42, Math.max(130, boxW), 36);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 16px Inter, sans-serif';
+            ctx.fillText(`✔ ${student.name}`, boxX + 8, boxY - 18);
 
-          this.checkAndMarkAttendance(student, confidencePct);
+            this.checkAndMarkAttendance(student, confidencePct);
+          } else {
+            ctx.lineWidth = 4;
+            ctx.strokeStyle = '#ef4444';
+            ctx.strokeRect(boxX, boxY, boxW, boxH);
 
-          if (statusElem) {
-            statusElem.innerHTML = `<i class="fa-solid fa-circle-check me-1"></i> Verified: ${student.name}`;
-            statusElem.className = 'status-pill green';
+            ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
+            ctx.fillRect(boxX, boxY - 42, Math.max(140, boxW), 36);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 15px Inter, sans-serif';
+            ctx.fillText(`❌ Not Enrolled`, boxX + 8, boxY - 18);
           }
-          window.showToast(`✔ Recognized ${student.name}! Attendance marked.`, 'success');
-        } else {
-          ctx.lineWidth = 4;
-          ctx.strokeStyle = '#ef4444';
-          ctx.strokeRect(faceBox.boxX, faceBox.boxY, faceBox.boxW, faceBox.boxH);
-
-          ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
-          ctx.fillRect(faceBox.boxX, faceBox.boxY - 42, faceBox.boxW, 36);
-          ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 16px Inter, sans-serif';
-          ctx.fillText(`❌ Face Not Enrolled`, faceBox.boxX + 10, faceBox.boxY - 18);
-
-          if (statusElem) {
-            statusElem.innerHTML = `<i class="fa-solid fa-circle-xmark me-1"></i> Not Recognized`;
-            statusElem.className = 'status-pill red';
-          }
-          window.showToast('Face not recognized in photo. Please ensure face is enrolled.', 'warning');
         }
+
+        if (statusElem) {
+          statusElem.innerHTML = `<i class="fa-solid fa-users me-1"></i> Detected ${detectedFaces.length} Face(s) (${recognizedCount} Verified)`;
+          statusElem.className = recognizedCount > 0 ? 'status-pill green' : 'status-pill red';
+        }
+        window.showToast(`Processed photo: ${detectedFaces.length} face(s) found, ${recognizedCount} student(s) attendance marked.`, 'success');
       };
       img.src = event.target.result;
     };
@@ -405,31 +406,35 @@ class FaceAIEngine {
       const width = this.canvas.width;
       const height = this.canvas.height;
 
-      let detectedDescriptor = null;
-      let faceBox = null;
+      let detectedFaces = [];
 
-      // 1. Try Pre-Trained Face-API Detection
+      // 1. Try Pre-Trained Face-API Multi-Face Detection
       if (this.isModelLoaded && window.faceapi) {
         try {
-          const detection = await faceapi.detectSingleFace(this.video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+          const detections = await faceapi.detectAllFaces(this.video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.45 }))
             .withFaceLandmarks()
-            .withFaceDescriptor();
+            .withFaceDescriptors();
 
-          if (detection) {
-            detectedDescriptor = Array.from(detection.descriptor);
-            const box = detection.detection.box;
-            faceBox = { boxX: box.x, boxY: box.y, boxW: box.width, boxH: box.height };
+          if (detections && detections.length > 0) {
+            detectedFaces = detections.map(d => ({
+              descriptor: Array.from(d.descriptor),
+              boxX: d.detection.box.x,
+              boxY: d.detection.box.y,
+              boxW: d.detection.box.width,
+              boxH: d.detection.box.height
+            }));
           }
-        } catch (e) {}
+        } catch (e) {
+          console.warn('[FaceAI] Multi-face detection fallback:', e);
+        }
       }
 
       // Fallback descriptor extraction if pre-trained CDN stream is pending
-      if (!detectedDescriptor) {
+      if (detectedFaces.length === 0) {
         const boxW = Math.min(280, width * 0.38);
         const boxH = Math.min(340, height * 0.52);
         const boxX = (width - boxW) / 2;
         const boxY = (height - boxH) / 2 - 20;
-        faceBox = { boxX, boxY, boxW, boxH };
 
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = width;
@@ -437,47 +442,41 @@ class FaceAIEngine {
         const tempCtx = tempCanvas.getContext('2d');
         tempCtx.drawImage(this.video, 0, 0, width, height);
         const imageData = tempCtx.getImageData(0, 0, width, height);
-        detectedDescriptor = this.computeFrameDescriptor(imageData);
+        const desc = this.computeFrameDescriptor(imageData);
+        detectedFaces = [{ descriptor: desc, boxX, boxY, boxW, boxH }];
       }
 
-      const { boxX, boxY, boxW, boxH } = faceBox;
+      // Process and render ALL detected faces simultaneously
+      for (const face of detectedFaces) {
+        const { descriptor, boxX, boxY, boxW, boxH } = face;
+        const matchResult = this.findBestFaceMatch(descriptor);
 
-      // Compare detectedDescriptor against enrolled student encodings
-      const matchResult = this.findBestFaceMatch(detectedDescriptor);
+        if (matchResult && matchResult.student) {
+          const student = matchResult.student;
+          const confidencePct = Math.min(99.9, Math.max(75.0, (1 - matchResult.distance) * 100)).toFixed(1);
 
-      if (matchResult && matchResult.student) {
-        // ENROLLED STUDENT MATCH FOUND
-        const student = matchResult.student;
-        const confidencePct = Math.min(99.9, Math.max(75.0, (1 - matchResult.distance) * 100)).toFixed(1);
+          this.ctx.lineWidth = 3;
+          this.ctx.strokeStyle = '#22c55e';
+          this.ctx.strokeRect(boxX, boxY, boxW, boxH);
 
-        // Draw Vibrant Green Bounding Box
-        this.ctx.lineWidth = 3;
-        this.ctx.strokeStyle = '#22c55e';
-        this.ctx.strokeRect(boxX, boxY, boxW, boxH);
+          this.ctx.fillStyle = 'rgba(34, 197, 94, 0.9)';
+          this.ctx.fillRect(boxX, boxY - 38, Math.max(120, boxW), 32);
+          this.ctx.fillStyle = '#ffffff';
+          this.ctx.font = 'bold 14px Inter, sans-serif';
+          this.ctx.fillText(`✔ ${student.name}`, boxX + 8, boxY - 16);
 
-        // Draw Name & Roll Header Tag
-        this.ctx.fillStyle = 'rgba(34, 197, 94, 0.9)';
-        this.ctx.fillRect(boxX, boxY - 38, boxW, 32);
-        this.ctx.fillStyle = '#ffffff';
-        this.ctx.font = 'bold 15px Inter, sans-serif';
-        this.ctx.fillText(`✔ ${student.name} (${student.rollNumber || student.roll_number})`, boxX + 10, boxY - 16);
+          this.checkAndMarkAttendance(student, confidencePct);
+        } else {
+          this.ctx.lineWidth = 3;
+          this.ctx.strokeStyle = '#ef4444';
+          this.ctx.strokeRect(boxX, boxY, boxW, boxH);
 
-        // Trigger automatic attendance recording
-        this.checkAndMarkAttendance(student, confidencePct);
-
-      } else {
-        // UNKNOWN / UNREGISTERED PERSON -> STRICTLY DO NOT MARK ATTENDANCE
-        this.ctx.lineWidth = 3;
-        this.ctx.strokeStyle = '#ef4444'; // Red Bounding Box
-        this.ctx.strokeRect(boxX, boxY, boxW, boxH);
-
-        this.ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
-        this.ctx.fillRect(boxX, boxY - 38, boxW, 32);
-        this.ctx.fillStyle = '#ffffff';
-        this.ctx.font = 'bold 14px Inter, sans-serif';
-        this.ctx.fillText('❌ Unknown Person (Not Enrolled)', boxX + 10, boxY - 16);
-
-        // Explicitly block attendance marking for unknown persons
+          this.ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
+          this.ctx.fillRect(boxX, boxY - 38, Math.max(140, boxW), 32);
+          this.ctx.fillStyle = '#ffffff';
+          this.ctx.font = 'bold 13px Inter, sans-serif';
+          this.ctx.fillText('❌ Not Enrolled', boxX + 8, boxY - 16);
+        }
       }
     }
 

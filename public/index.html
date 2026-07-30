@@ -38,8 +38,11 @@
         <button class="auth-tab-btn active" id="tab-btn-login">
           <i class="fa-solid fa-right-to-bracket me-1"></i> Admin Login
         </button>
+        <button class="auth-tab-btn" id="tab-btn-student">
+          <i class="fa-solid fa-user-graduate me-1"></i> Student Check-In
+        </button>
         <button class="auth-tab-btn" id="tab-btn-signup">
-          <i class="fa-solid fa-user-plus me-1"></i> Register Account
+          <i class="fa-solid fa-user-plus me-1"></i> Register
         </button>
       </div>
 
@@ -49,7 +52,7 @@
         <span id="login-alert-msg">Validation message</span>
       </div>
 
-      <!-- 1. LOGIN FORM -->
+      <!-- 1. ADMIN LOGIN FORM -->
       <form id="form-login" onsubmit="event.preventDefault();">
         <div class="form-group mb-3">
           <label class="form-label">Username</label>
@@ -75,7 +78,23 @@
         </button>
       </form>
 
-      <!-- 2. SIGNUP FORM -->
+      <!-- 2. STUDENT SELF CHECK-IN FORM -->
+      <form id="form-student-portal" class="hidden" onsubmit="event.preventDefault();">
+        <div class="form-group mb-3">
+          <label class="form-label">Roll Number / Student ID *</label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="fa-solid fa-id-card"></i></span>
+            <input type="text" id="student-portal-roll" class="form-control" placeholder="Enter your Roll Number..." required />
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-success w-100 btn-lg mb-3" id="btn-student-portal-submit">
+          <i class="fa-solid fa-mobile-screen-button me-2"></i> Launch Mobile Self Scanner
+        </button>
+        <p class="text-center text-muted small">Access your face attendance scanner directly on smartphone or kiosk.</p>
+      </form>
+
+      <!-- 3. SIGNUP FORM -->
       <form id="form-signup" class="hidden" onsubmit="event.preventDefault();">
         <div class="form-group mb-2">
           <label class="form-label">Full Name *</label>
@@ -485,14 +504,15 @@
         </section>
 
 
-        <!-- 3. STUDENT MANAGEMENT MODULE -->
-        <section id="view-students" class="tab-view">
           <div class="view-header">
             <div>
               <h2 class="view-title">Student Directory & Management</h2>
-              <p class="view-subtitle">Register new students with face encodings, update details, or recapture facial photos.</p>
+              <p class="view-subtitle">Register new students with face encodings, update details, or import bulk CSV student rosters.</p>
             </div>
-            <div>
+            <div class="d-flex gap-2 flex-wrap">
+              <button class="btn btn-accent" id="btn-open-csv-modal">
+                <i class="fa-solid fa-file-import me-2"></i> Bulk CSV Import
+              </button>
               <button class="btn btn-primary" id="btn-open-add-student-modal">
                 <i class="fa-solid fa-user-plus me-2"></i> Register New Student
               </button>
@@ -896,6 +916,38 @@
           <p class="text-muted small mt-3 mb-0" style="font-size: 0.78rem;">
             <i class="fa-solid fa-wifi text-warning me-1"></i> <strong>Note:</strong> Connect your smartphone to the same Wi-Fi / Hotspot network as this PC to scan and open.
           </p>
+        </div>
+      </div>
+    <!-- MODAL 3: BULK STUDENT ROSTER CSV/EXCEL IMPORT MODAL -->
+    <div class="modal-backdrop" id="modal-csv-import">
+      <div class="modal-box modal-md">
+        <div class="modal-header">
+          <h5><i class="fa-solid fa-file-csv text-accent me-2"></i> Bulk Student Roster Import</h5>
+          <button class="btn-close-modal" data-close="modal-csv-import">&times;</button>
+        </div>
+        <div class="modal-body p-4">
+          <p class="text-muted small mb-3">Upload a CSV or Excel (.xlsx) file containing student records to enroll multiple students at once.</p>
+          
+          <div class="form-group mb-3">
+            <label class="form-label">Select Roster File (.csv, .xlsx)</label>
+            <input type="file" id="csv-file-input" accept=".csv, .xlsx, .xls" class="form-control" />
+          </div>
+
+          <div class="quick-demo-box p-3 mb-3">
+            <span class="fw-bold d-block mb-1 text-accent"><i class="fa-solid fa-table me-1"></i> Expected Columns in File:</span>
+            <code class="small text-light d-block">Name, RollNumber, RegNumber, Branch, Semester, Mobile</code>
+          </div>
+
+          <div id="csv-preview-box" class="hidden">
+            <h6 class="text-success mb-2"><i class="fa-solid fa-circle-check me-1"></i> File Loaded:</h6>
+            <p id="csv-preview-text" class="small text-muted mb-0">Found 0 student records ready for import.</p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-close="modal-csv-import">Cancel</button>
+          <button class="btn btn-success" id="btn-submit-csv-import">
+            <i class="fa-solid fa-upload me-2"></i> Import Roster
+          </button>
         </div>
       </div>
     </div>
