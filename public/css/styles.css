@@ -1303,3 +1303,331 @@ body {
 
 .hidden { display: none !important; }
 
+/* ==========================================================================
+   Mobile-Friendly Responsive & QR Code Styles
+   ========================================================================== */
+
+/* Mobile Hamburger Toggle Button */
+.mobile-nav-toggle {
+  display: none;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-size: 1.25rem;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  margin-right: 12px;
+  transition: var(--transition-fast);
+}
+
+.mobile-nav-toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--accent-cyan);
+}
+
+/* Sidebar Mobile Backdrop */
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 1040;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.sidebar-backdrop.show {
+  display: block;
+  opacity: 1;
+}
+
+/* Button & Accent Utilities */
+.btn-accent {
+  background: linear-gradient(135deg, var(--accent-purple), var(--accent-indigo));
+  color: #ffffff;
+  border: none;
+
+  font-weight: 600;
+  box-shadow: 0 4px 15px rgba(168, 85, 247, 0.3);
+}
+
+.btn-accent:hover {
+  background: linear-gradient(135deg, #c084fc, #818cf8);
+  box-shadow: 0 6px 20px rgba(168, 85, 247, 0.5);
+  color: #ffffff;
+}
+
+.badge-mini {
+  font-size: 0.68rem;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-weight: 700;
+}
+
+.badge-new-feature {
+  background: linear-gradient(135deg, var(--accent-emerald), #059669);
+  color: #fff;
+  font-size: 0.65rem;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: auto;
+  font-weight: 700;
+}
+
+/* QR Code Display Card & Modal */
+.qr-code-card {
+  display: inline-block;
+  padding: 16px;
+  background: #ffffff;
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  margin: 0 auto;
+}
+
+#qrcode-container img,
+#qrcode-container canvas {
+  display: block;
+  margin: 0 auto;
+  max-width: 200px;
+  max-height: 200px;
+}
+
+.qr-url-box {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px dashed var(--accent-cyan);
+}
+
+/* Dedicated Mobile Camera Card */
+.mobile-aspect {
+  height: 380px !important;
+  max-height: 55vh;
+}
+
+.mobile-camera-card {
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+/* Mobile Bottom Navigation Bar */
+.mobile-bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  background: var(--bg-header);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-top: 1px solid var(--border-color);
+  z-index: 1030;
+  justify-content: space-around;
+  align-items: center;
+  padding: 0 8px;
+}
+
+.mobile-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 6px 10px;
+  transition: var(--transition-fast);
+  flex: 1;
+}
+
+.mobile-nav-item i {
+  font-size: 1.25rem;
+  margin-bottom: 3px;
+}
+
+.mobile-nav-item.active {
+  color: var(--accent-cyan);
+  font-weight: 700;
+}
+
+.mobile-nav-item.active i {
+  transform: translateY(-2px);
+}
+
+.mobile-qr-btn {
+  position: relative;
+  top: -14px;
+}
+
+.mobile-qr-circle {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-cyan), var(--accent-indigo));
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(56, 189, 248, 0.5);
+  transition: var(--transition-fast);
+}
+
+.mobile-qr-circle i {
+  font-size: 1.4rem;
+  margin-bottom: 0;
+}
+
+.mobile-nav-item:hover .mobile-qr-circle {
+  transform: scale(1.08);
+}
+
+
+/* ==========================================================================
+   Media Queries & Responsive Breakpoints
+   ========================================================================== */
+
+/* Tablet & Smaller Screens (< 992px) */
+@media (max-width: 992px) {
+  .mobile-nav-toggle {
+    display: inline-flex;
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 68px;
+    left: -280px;
+    bottom: 0;
+    width: 270px;
+    z-index: 1050;
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 10px 0 30px rgba(0, 0, 0, 0.5);
+  }
+
+  .sidebar.mobile-open {
+    left: 0;
+  }
+
+  .workspace-wrapper {
+    flex-direction: column;
+  }
+
+  .content-area {
+    padding: 16px;
+    padding-bottom: 80px; /* Space for bottom nav */
+  }
+
+  .mobile-bottom-nav {
+    display: flex;
+  }
+
+  .scanner-layout {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .top-header {
+    padding: 0 16px;
+  }
+
+  .header-center {
+    display: none; /* Hide top clock on tablet to save space */
+  }
+}
+
+/* Smartphone Screens (< 768px) */
+@media (max-width: 768px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .kpi-card {
+    padding: 14px;
+  }
+
+  .kpi-icon {
+    width: 42px;
+    height: 42px;
+    font-size: 1.1rem;
+  }
+
+  .kpi-value {
+    font-size: 1.5rem;
+  }
+
+  .view-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .viewport-controls {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .viewport-controls .btn {
+    flex: 1 1 calc(50% - 10px);
+    font-size: 0.85rem;
+    padding: 10px;
+  }
+
+  .filter-bar, .filter-grid {
+    flex-direction: column;
+    grid-template-columns: 1fr;
+  }
+
+  .pose-gallery-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+
+  .modal-box {
+    width: 95%;
+    max-height: 90vh;
+    overflow-y: auto;
+    margin: 10px;
+  }
+
+  .export-buttons {
+    flex-wrap: wrap;
+    gap: 6px;
+    width: 100%;
+  }
+
+  .export-buttons .btn {
+    flex: 1 1 calc(50% - 6px);
+    font-size: 0.8rem;
+  }
+}
+
+/* Extra Small Phones (< 480px) */
+@media (max-width: 480px) {
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .brand-title {
+    font-size: 1.1rem;
+  }
+
+  .badge-version {
+    display: none;
+  }
+
+  .user-info {
+    display: none; /* Icon only on extra small screens */
+  }
+
+  .viewport-controls .btn {
+    flex: 1 1 100%;
+  }
+
+  .camera-container {
+    height: 260px;
+  }
+}
+
+

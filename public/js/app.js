@@ -35,7 +35,7 @@ window.showToast = function(message, type = 'info') {
 
 // Switch Tab Navigation Helper
 window.switchTab = function(tabId) {
-  const links = document.querySelectorAll('.nav-link');
+  const links = document.querySelectorAll('.nav-link, .mobile-nav-item');
   const views = document.querySelectorAll('.tab-view');
 
   links.forEach(l => {
@@ -47,6 +47,10 @@ window.switchTab = function(tabId) {
     if (v.id === `view-${tabId}`) v.classList.add('active');
     else v.classList.remove('active');
   });
+
+  // Close mobile sidebar if open
+  document.getElementById('app-sidebar')?.classList.remove('mobile-open');
+  document.getElementById('sidebar-backdrop')?.classList.remove('show');
 
   if (tabId === 'dashboard') loadDashboardStats();
   if (tabId === 'students') loadStudentsDirectory();
@@ -60,6 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initThemeToggle();
   initModals();
   initExportHandlers();
+  initMobileAndQR();
 });
 
 // Live Clock Initializer
@@ -504,4 +509,155 @@ function initExportHandlers() {
   document.getElementById('btn-print-history')?.addEventListener('click', () => {
     window.print();
   });
+}
+
+// Mobile Responsive Drawer, QR Code Generator & Mobile Attendance Handlers
+function initMobileAndQR() {
+  const sidebar = document.getElementById('app-sidebar');
+  const backdrop = document.getElementById('sidebar-backdrop');
+  const navToggle = document.getElementById('btn-mobile-nav-toggle');
+
+  // Mobile Hamburger Toggle
+  navToggle?.addEventListener('click', () => {
+    sidebar?.classList.toggle('mobile-open');
+    backdrop?.classList.toggle('show');
+  });
+
+  backdrop?.addEventListener('click', () => {
+    sidebar?.classList.remove('mobile-open');
+    backdrop?.classList.remove('show');
+  });
+
+  // Mobile Bottom Nav item click handlers
+  document.querySelectorAll('.mobile-nav-item[data-tab]').forEach(item => {
+    item.addEventListener('click', () => {
+      const tabId = item.getAttribute('data-tab');
+      window.switchTab(tabId);
+    });
+  });
+
+  // QR Code Modal Open Buttons
+  const qrButtons = [
+    'btn-open-qr-modal',
+    'btn-attendance-qr',
+    'btn-mobile-show-qr',
+    'mobile-bottom-qr-trigger'
+  ];
+
+  qrButtons.forEach(btnId => {
+    document.getElementById(btnId)?.addEventListener('click', () => {
+      openAttendanceQRModal();
+    });
+  });
+
+  // Copy Mobile QR Link
+  document.getElementById('btn-copy-qr-link')?.addEventListener('click', () => {
+    const urlElem = document.getElementById('qr-target-url');
+    if (urlElem) {
+      navigator.clipboard.writeText(urlElem.textContent);
+      window.showToast('Mobile attendance link copied to clipboard!', 'success');
+    }
+  });
+
+  // Open Mobile View Tab from Modal
+  document.getElementById('btn-open-mobile-tab')?.addEventListener('click', () => {
+    document.getElementById('modal-qr-code')?.classList.remove('show');
+    window.switchTab('mobile-attendance');
+  });
+
+  // Manual Roll Number Verification on Mobile
+  document.getElementById('btn-mobile-verify-roll')?.addEventListener('click', async () => {
+    const input = document.getElementById('mobile-roll-input');
+    const rollNum = input?.value.trim();
+    if (!rollNum) {
+      window.showToast('Please enter a valid Roll Number or Student ID.', 'warning');
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/attendance/mark', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roll_number: rollNum,
+          student_id: rollNum,
+          status: 'Present',
+          device: 'Mobile Phone (Manual Roll Check)',
+          confidence: '100%'
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        window.showToast(`✔ Attendance marked Present for Roll #${rollNum}!`, 'success');
+        input.value = '';
+        
+        // Add to mobile feed list
+        const mobileFeed = document.getElementById('mobile-feed-list');
+        if (mobileFeed) {
+          const item = document.createElement('div');
+          item.className = 'feed-item animate-pop';
+          item.innerHTML = `
+            <div class="feed-icon bg-success"><i class="fa-solid fa-user-check"></i></div>
+            <div class="feed-info">
+              <span class="feed-name">Roll #${rollNum}</span>
+              <span class="feed-meta">Mobile Manual Check • ${new Date().toLocaleTimeString()}</span>
+            </div>
+            <span class="badge bg-success">Present</span>
+          `;
+          const empty = mobileFeed.querySelector('.feed-empty');
+          if (empty) empty.remove();
+          mobileFeed.insertBefore(item, mobileFeed.firstChild);
+        }
+      } else {
+        window.showToast(data.message || 'Failed to mark attendance for Roll Number.', 'danger');
+      }
+    } catch (err) {
+      window.showToast('Server error recording manual attendance.', 'danger');
+    }
+  });
+
+  // Check URL parameters for ?mode=mobile on load
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('mode') === 'mobile' || window.location.hash === '#mobile') {
+    setTimeout(() => {
+      window.switchTab('mobile-attendance');
+      window.showToast('Mobile attendance mode launched!', 'info');
+    }, 500);
+  }
+}
+
+// Generate Dynamic QR Code helper
+function openAttendanceQRModal() {
+  const modal = document.getElementById('modal-qr-code');
+  const qrContainer = document.getElementById('qrcode-container');
+  const urlElem = document.getElementById('qr-target-url');
+  if (!modal || !qrContainer) return;
+
+  // Clear previous QR code
+  qrContainer.innerHTML = '';
+
+  // Determine current host origin URL for mobile scanning
+  const host = window.location.host;
+  const protocol = window.location.protocol;
+  const mobileUrl = `${protocol}//${host}?mode=mobile`;
+
+  if (urlElem) urlElem.textContent = mobileUrl;
+
+  if (window.QRCode) {
+    new QRCode(qrContainer, {
+      text: mobileUrl,
+      width: 180,
+      height: 180,
+      colorDark: '#0f172a',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.H
+    });
+  } else {
+    // Fallback QR Code image generator if CDN is unavailable
+    const fallbackImg = document.createElement('img');
+    fallbackImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(mobileUrl)}`;
+    qrContainer.appendChild(fallbackImg);
+  }
+
+  modal.classList.add('show');
 }

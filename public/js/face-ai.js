@@ -12,6 +12,12 @@ class FaceAIEngine {
     this.lastFpsUpdate = Date.now();
     this.matchThreshold = 0.50; // Euclidean distance threshold (lower = stricter)
 
+    this.facingMode = 'user'; // 'user' (front camera) or 'environment' (rear camera)
+    this.activeVideo = null;
+    this.activeCanvas = null;
+    this.activeCtx = null;
+    this.isMobileScanning = false;
+
     // 20-Pose Capture Wizard State
     this.wizardStream = null;
     this.wizardVideo = null;
@@ -80,8 +86,14 @@ class FaceAIEngine {
   bindEvents() {
     document.getElementById('btn-start-camera')?.addEventListener('click', () => this.startCamera());
     document.getElementById('btn-stop-camera')?.addEventListener('click', () => this.stopCamera());
+    document.getElementById('btn-switch-camera')?.addEventListener('click', () => this.switchCamera());
     document.getElementById('btn-open-register-wizard')?.addEventListener('click', () => this.openRegisterWizard());
     
+    // Mobile Scanner Buttons
+    document.getElementById('btn-mobile-start-cam')?.addEventListener('click', () => this.startMobileCamera());
+    document.getElementById('btn-mobile-stop-cam')?.addEventListener('click', () => this.stopMobileCamera());
+    document.getElementById('btn-mobile-flip-camera')?.addEventListener('click', () => this.switchMobileCamera());
+
     // Threshold slider setting
     const slider = document.getElementById('setting-threshold-slider');
     if (slider) {
@@ -105,19 +117,46 @@ class FaceAIEngine {
     }
   }
 
+  async switchCamera() {
+    this.facingMode = (this.facingMode === 'user') ? 'environment' : 'user';
+    window.showToast(`Switched camera to ${this.facingMode === 'user' ? 'Front (Selfie)' : 'Rear (Back)'} mode.`, 'info');
+    if (this.isScanning) {
+      this.stopCamera();
+      await this.startCamera();
+    }
+  }
+
+  async switchMobileCamera() {
+    this.facingMode = (this.facingMode === 'user') ? 'environment' : 'user';
+    window.showToast(`Switched mobile camera to ${this.facingMode === 'user' ? 'Front' : 'Rear'} camera.`, 'info');
+    if (this.isMobileScanning) {
+      this.stopMobileCamera();
+      await this.startMobileCamera();
+    }
+  }
+
   async startCamera() {
     if (this.isScanning) return;
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }
-      });
+      const constraints = {
+        video: { 
+          width: { ideal: 1280 }, 
+          height: { ideal: 720 }, 
+          facingMode: { ideal: this.facingMode } 
+        }
+      };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
       
       this.video.srcObject = stream;
       await this.video.play();
 
       this.canvas.width = this.video.videoWidth || 640;
       this.canvas.height = this.video.videoHeight || 480;
+
+      this.activeVideo = this.video;
+      this.activeCanvas = this.canvas;
+      this.activeCtx = this.ctx;
 
       this.isScanning = true;
       document.getElementById('camera-status-pill').innerHTML = `<i class="fa-solid fa-circle me-1"></i> Live Attendance Scanner Active`;
@@ -146,6 +185,84 @@ class FaceAIEngine {
     document.getElementById('camera-status-pill').className = 'status-pill text-muted';
     document.getElementById('camera-instruction-banner').style.display = 'flex';
     window.showToast('Attendance camera scanner stopped.', 'info');
+  }
+
+  async startMobileCamera() {
+    if (this.isMobileScanning) return;
+
+    const mVideo = document.getElementById('mobile-webcam-video');
+    const mCanvas = document.getElementById('mobile-camera-canvas');
+    if (!mVideo || !mCanvas) return;
+
+    try {
+      const constraints = {
+        video: { 
+          width: { ideal: 720 }, 
+          height: { ideal: 1280 }, 
+          facingMode: { ideal: this.facingMode } 
+        }
+      };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      
+      mVideo.srcObject = stream;
+      await mVideo.play();
+
+      mCanvas.width = mVideo.videoWidth || 480;
+      mCanvas.height = mVideo.videoHeight || 640;
+
+      this.video = mVideo;
+      this.canvas = mCanvas;
+      this.ctx = mCanvas.getContext('2d');
+      this.activeVideo = mVideo;
+      this.activeCanvas = mCanvas;
+      this.activeCtx = this.ctx;
+
+      this.isMobileScanning = true;
+      this.isScanning = true;
+
+      const statusElem = document.getElementById('mobile-camera-status');
+      if (statusElem) {
+        statusElem.innerHTML = `<i class="fa-solid fa-circle me-1"></i> Mobile Scanner Active`;
+        statusElem.className = 'status-pill green';
+      }
+      const banner = document.getElementById('mobile-camera-banner');
+      if (banner) banner.style.display = 'none';
+
+      await this.loadEnrolledDescriptors();
+      window.showToast('Mobile camera face scanner launched.', 'success');
+      this.scanLoop();
+    } catch (err) {
+      console.error('Mobile camera access error:', err);
+      window.showToast('Unable to access mobile camera. Please verify permissions.', 'danger');
+    }
+  }
+
+  stopMobileCamera() {
+    this.isMobileScanning = false;
+    this.isScanning = false;
+
+    const mVideo = document.getElementById('mobile-webcam-video');
+    const mCanvas = document.getElementById('mobile-camera-canvas');
+
+    if (mVideo && mVideo.srcObject) {
+      const tracks = mVideo.srcObject.getTracks();
+      tracks.forEach(track => track.stop());
+      mVideo.srcObject = null;
+    }
+    if (mCanvas) {
+      const mCtx = mCanvas.getContext('2d');
+      mCtx.clearRect(0, 0, mCanvas.width, mCanvas.height);
+    }
+
+    const statusElem = document.getElementById('mobile-camera-status');
+    if (statusElem) {
+      statusElem.innerHTML = `<i class="fa-solid fa-circle me-1"></i> Mobile Scanner Stopped`;
+      statusElem.className = 'status-pill text-muted';
+    }
+    const banner = document.getElementById('mobile-camera-banner');
+    if (banner) banner.style.display = 'flex';
+
+    window.showToast('Mobile camera scanner stopped.', 'info');
   }
 
   async scanLoop() {

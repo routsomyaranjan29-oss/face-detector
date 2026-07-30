@@ -10,11 +10,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   
-  <!-- External JS Libraries (Chart.js, SheetJS, html2pdf, vladmandic face-api) -->
+  <!-- External JS Libraries (Chart.js, SheetJS, html2pdf, vladmandic face-api, QRCode) -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
   <!-- Custom Glassmorphism Styles -->
   <link rel="stylesheet" href="css/styles.css" />
@@ -126,6 +127,9 @@
     <!-- Top Navigation Header -->
     <header class="top-header">
       <div class="header-left">
+        <button class="mobile-nav-toggle" id="btn-mobile-nav-toggle" title="Toggle Navigation">
+          <i class="fa-solid fa-bars"></i>
+        </button>
         <div class="brand-logo">
           <i class="fa-solid fa-face-smile me-2 ai-glow-icon"></i>
           <span class="brand-title">Visio<span class="text-accent">Face</span> AI</span>
@@ -143,6 +147,10 @@
       </div>
 
       <div class="header-right">
+        <button class="icon-btn btn-qr-header text-accent" id="btn-open-qr-modal" title="Scan Mobile Attendance QR Code">
+          <i class="fa-solid fa-qrcode"></i>
+        </button>
+
         <button class="icon-btn" id="btn-theme-toggle" title="Toggle Dark/Light Mode">
           <i class="fa-solid fa-moon"></i>
         </button>
@@ -162,11 +170,14 @@
       </div>
     </header>
 
+    <!-- Sidebar Backdrop for Mobile -->
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
     <!-- Workspace Sidebar + Content -->
     <div class="workspace-wrapper">
       
       <!-- Sidebar Nav -->
-      <aside class="sidebar">
+      <aside class="sidebar" id="app-sidebar">
         <nav class="nav-menu">
           <button class="nav-link active" data-tab="dashboard">
             <i class="fa-solid fa-chart-pie"></i>
@@ -176,6 +187,11 @@
             <i class="fa-solid fa-camera"></i>
             <span>Attendance Panel</span>
             <span class="pulse-indicator"></span>
+          </button>
+          <button class="nav-link" data-tab="mobile-attendance">
+            <i class="fa-solid fa-mobile-screen-button text-accent"></i>
+            <span>Mobile Scanner</span>
+            <span class="badge-mini bg-success ms-auto">QR</span>
           </button>
           <button class="nav-link" data-tab="students">
             <i class="fa-solid fa-user-graduate"></i>
@@ -343,6 +359,12 @@
                 <button class="btn btn-danger btn-lg" id="btn-stop-camera">
                   <i class="fa-solid fa-stop me-2"></i> Stop Camera
                 </button>
+                <button class="btn btn-warning" id="btn-switch-camera" title="Switch Front / Rear Camera">
+                  <i class="fa-solid fa-camera-rotate me-1"></i> Flip Camera
+                </button>
+                <button class="btn btn-accent" id="btn-attendance-qr" title="Generate QR Code for Mobile Attendance">
+                  <i class="fa-solid fa-qrcode me-1"></i> Mobile QR
+                </button>
                 <button class="btn btn-success" id="btn-open-register-wizard">
                   <i class="fa-solid fa-user-plus me-2"></i> Register Student Face
                 </button>
@@ -361,6 +383,86 @@
                     <i class="fa-solid fa-face-viewfinder fs-1 mb-2 d-block text-secondary"></i>
                     Start camera attendance to log recognized students here.
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- 2B. DEDICATED MOBILE ATTENDANCE MODULE -->
+        <section id="view-mobile-attendance" class="tab-view">
+          <div class="view-header flex-between flex-wrap">
+            <div>
+              <h2 class="view-title"><i class="fa-solid fa-mobile-screen-button text-accent me-2"></i> Mobile Attendance Scanner</h2>
+              <p class="view-subtitle">Scan your face using mobile camera or enter Roll Number for instant attendance verification.</p>
+            </div>
+            <div class="d-flex gap-2 align-items-center mt-2 mt-sm-0">
+              <button class="btn btn-accent btn-sm" id="btn-mobile-show-qr">
+                <i class="fa-solid fa-qrcode me-1"></i> QR Code
+              </button>
+            </div>
+          </div>
+
+          <div class="mobile-scanner-wrapper">
+            <!-- Mobile Camera Card -->
+            <div class="glass-card mobile-camera-card mb-4">
+              <div class="viewport-header px-3 py-2">
+                <div class="status-pill text-muted" id="mobile-camera-status">
+                  <i class="fa-solid fa-circle me-1"></i> Ready
+                </div>
+                <button class="btn btn-sm btn-outline-light py-1 px-2" id="btn-mobile-flip-camera" title="Switch Front/Back Camera">
+                  <i class="fa-solid fa-camera-rotate me-1"></i> Flip
+                </button>
+              </div>
+
+              <div class="camera-container mobile-aspect">
+                <video id="mobile-webcam-video" autoplay playsinline muted></video>
+                <canvas id="mobile-camera-canvas"></canvas>
+                
+                <div class="camera-instruction-banner" id="mobile-camera-banner">
+                  <i class="fa-solid fa-camera me-2 text-accent"></i> Tap "Start Mobile Scanner"
+                </div>
+
+                <div class="camera-alert-overlay" id="mobile-alert-overlay">
+                  <div class="alert-box-content">
+                    <i class="fa-solid fa-circle-check text-success alert-icon" id="mobile-alert-icon"></i>
+                    <h3 id="mobile-alert-name">Student Name</h3>
+                    <p id="mobile-alert-info">Roll: 101</p>
+                    <span class="badge bg-success" id="mobile-alert-status">✔ PRESENT</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="p-3 text-center d-flex gap-2 justify-content-center">
+                <button class="btn btn-primary btn-lg flex-1" id="btn-mobile-start-cam">
+                  <i class="fa-solid fa-play me-2"></i> Start Mobile Scanner
+                </button>
+                <button class="btn btn-danger btn-lg flex-1" id="btn-mobile-stop-cam">
+                  <i class="fa-solid fa-stop me-2"></i> Stop
+                </button>
+              </div>
+            </div>
+
+            <!-- Manual Attendance Roll Number Fallback -->
+            <div class="glass-card p-4 mb-4">
+              <h5 class="mb-3"><i class="fa-solid fa-keyboard text-accent me-2"></i> Manual Roll Number Verification</h5>
+              <div class="input-group mb-2">
+                <span class="input-group-text"><i class="fa-solid fa-id-card"></i></span>
+                <input type="text" id="mobile-roll-input" class="form-control" placeholder="Enter Roll Number or Student ID..." />
+                <button class="btn btn-success" id="btn-mobile-verify-roll">
+                  <i class="fa-solid fa-check me-1"></i> Mark
+                </button>
+              </div>
+              <span class="text-muted small">Use this fallback if smartphone lighting is low or face recognition is unavailable.</span>
+            </div>
+
+            <!-- Mobile Recent Log Activity Feed -->
+            <div class="glass-card p-3">
+              <h5 class="mb-3 px-1"><i class="fa-solid fa-history text-accent me-2"></i> Today's Mobile Scans</h5>
+              <div id="mobile-feed-list" class="feed-list">
+                <div class="feed-empty p-3 text-center text-muted">
+                  No attendance records logged on this device yet today.
                 </div>
               </div>
             </div>
@@ -747,6 +849,63 @@
         </div>
       </div>
     </div>
+
+    <!-- MODAL 2: MOBILE ATTENDANCE QR CODE SCANNER MODAL -->
+    <div class="modal-backdrop" id="modal-qr-code">
+      <div class="modal-box modal-md text-center">
+        <div class="modal-header">
+          <h5 class="w-100 text-center"><i class="fa-solid fa-qrcode text-accent me-2"></i> Scan QR Code for Mobile Attendance</h5>
+          <button class="btn-close-modal" data-close="modal-qr-code">&times;</button>
+        </div>
+        <div class="modal-body p-4">
+          <p class="text-muted small mb-3">Scan this QR Code with your smartphone camera to open the mobile face attendance panel instantly!</p>
+          
+          <div class="qr-code-card">
+            <div id="qrcode-container" class="qr-wrapper"></div>
+          </div>
+
+          <div class="qr-url-box mt-3 p-2 rounded">
+            <span class="text-muted small d-block mb-1"><i class="fa-solid fa-link me-1 text-accent"></i> Mobile Attendance Link:</span>
+            <code id="qr-target-url" class="fs-6 text-accent fw-bold">http://localhost:3000?mode=mobile</code>
+          </div>
+
+          <div class="d-flex justify-content-center gap-2 mt-3">
+            <button class="btn btn-outline-light btn-sm" id="btn-copy-qr-link">
+              <i class="fa-regular fa-copy me-1"></i> Copy Link
+            </button>
+            <button class="btn btn-primary btn-sm" id="btn-open-mobile-tab">
+              <i class="fa-solid fa-arrow-up-right-from-square me-1"></i> Open Mobile View
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MOBILE BOTTOM NAVIGATION BAR -->
+    <nav class="mobile-bottom-nav">
+      <button class="mobile-nav-item active" data-tab="dashboard">
+        <i class="fa-solid fa-chart-pie"></i>
+        <span>Dashboard</span>
+      </button>
+      <button class="mobile-nav-item" data-tab="attendance-panel">
+        <i class="fa-solid fa-camera"></i>
+        <span>Camera</span>
+      </button>
+      <button class="mobile-nav-item mobile-qr-btn" id="mobile-bottom-qr-trigger">
+        <div class="mobile-qr-circle">
+          <i class="fa-solid fa-qrcode"></i>
+        </div>
+        <span>Scan QR</span>
+      </button>
+      <button class="mobile-nav-item" data-tab="mobile-attendance">
+        <i class="fa-solid fa-mobile-screen-button"></i>
+        <span>Mobile</span>
+      </button>
+      <button class="mobile-nav-item" data-tab="students">
+        <i class="fa-solid fa-user-graduate"></i>
+        <span>Students</span>
+      </button>
+    </nav>
 
     <!-- Toast Notifications -->
     <div id="toast-container" class="toast-container"></div>
