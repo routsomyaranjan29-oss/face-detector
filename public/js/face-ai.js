@@ -581,11 +581,14 @@ class FaceAIEngine {
         this.addLiveFeedItem(student.name, student.rollNumber || student.roll_number, student.branch, data.attendance.time, data.attendance.status);
 
         if (window.loadDashboardStats) window.loadDashboardStats();
+        if (window.loadAttendanceHistory) window.loadAttendanceHistory();
+        if (window.loadNotificationDashboard) window.loadNotificationDashboard();
 
       } else if (data.duplicate) {
         // Strict Duplicate Prevention Alert (No Duplicate Notifications)
         this.showRecognitionOverlay(student.name, `Roll: ${student.rollNumber || student.roll_number} | ${student.branch}`, 'ALREADY MARKED TODAY', '', true);
         window.showToast(data.message || `✅ Attendance already marked today for ${student.name}`, 'warning');
+        if (window.loadAttendanceHistory) window.loadAttendanceHistory();
       }
     } catch (err) {
       console.error('Attendance mark API error:', err);

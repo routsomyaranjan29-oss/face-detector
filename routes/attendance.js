@@ -21,7 +21,10 @@ router.post('/mark', async (req, res) => {
     }
 
     const now = new Date();
-    const dateStr = now.toISOString().split('T')[0];
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    const dateStr = `${yyyy}-${mm}-${dd}`;
     const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const currentTimestamp = now.getTime();
 
@@ -202,9 +205,15 @@ router.get('/history', async (req, res) => {
 
     // SQLite Fallback
     let sql = `
-      SELECT a.*, s.name, s.roll_number, s.branch, s.department, s.semester, s.photo_path
+      SELECT a.*, 
+             COALESCE(s.name, 'Student (' || a.student_id || ')') as name, 
+             COALESCE(s.roll_number, a.student_id) as roll_number, 
+             COALESCE(s.branch, s.department, 'Computer Science') as branch, 
+             COALESCE(s.department, 'Computer Science') as department, 
+             COALESCE(s.semester, 'Semester 1') as semester, 
+             s.photo_path
       FROM attendance a
-      JOIN students s ON a.student_id = s.student_id
+      LEFT JOIN students s ON (a.student_id = s.student_id OR a.student_id = s.roll_number)
       WHERE 1=1
     `;
     let params = [];
@@ -215,8 +224,8 @@ router.get('/history', async (req, res) => {
     }
 
     if (targetBranch && targetBranch !== 'All') {
-      sql += ' AND (s.branch = ? OR s.department = ?)';
-      params.push(targetBranch, targetBranch);
+      sql += ' AND (s.branch = ? OR s.department = ? OR COALESCE(s.branch, s.department) = ?)';
+      params.push(targetBranch, targetBranch, targetBranch);
     }
 
     if (semester && semester !== 'All') {
@@ -240,9 +249,10 @@ router.get('/history', async (req, res) => {
 
     const normalizedLogs = rows.map(r => ({
       ...r,
-      rollNumber: r.roll_number || r.rollNumber,
+      name: r.name || `Student (${r.student_id})`,
+      rollNumber: r.roll_number || r.rollNumber || r.student_id,
       studentId: r.student_id || r.studentId,
-      branch: r.branch || r.department,
+      branch: r.branch || r.department || 'Computer Science',
       device: r.mode || 'Webcam'
     }));
 

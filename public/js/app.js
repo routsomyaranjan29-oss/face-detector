@@ -68,6 +68,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initMobileAndQR();
   initCSVImport();
   initNotificationHandlers();
+  loadAttendanceHistory();
   startRealtimeSync();
 });
 
@@ -374,9 +375,11 @@ function renderStudentsTable(students) {
     const photo = s.photoPath || s.photo_path;
     const isEnrolled = s.faceEnrolled || s.face_enrolled;
 
+    const initial = (s.name || '?').charAt(0).toUpperCase();
+    const fallbackAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(s.name || 'Student')}&background=6366f1&color=ffffff&bold=true`;
     const photoHtml = photo 
-      ? `<img src="/${photo}" class="student-avatar-thumb" alt="${s.name}" />`
-      : `<div class="student-avatar-placeholder">${s.name.charAt(0)}</div>`;
+      ? `<img src="/${photo}" class="student-avatar-thumb" alt="${s.name}" onerror="this.onerror=null; this.src='${fallbackAvatar}';" />`
+      : `<div class="student-avatar-placeholder" title="${s.name}">${initial}</div>`;
 
     const statusBadge = isEnrolled 
       ? `<span class="badge bg-success"><i class="fa-solid fa-face-smile me-1"></i> Face Enrolled</span>`
@@ -393,6 +396,9 @@ function renderStudentsTable(students) {
         <td>${s.mobile || s.phone || 'N/A'}</td>
         <td>${statusBadge}</td>
         <td>
+          <button class="btn btn-sm btn-success me-1" onclick="quickMarkAttendance('${sId}')" title="Quick Mark Present Today">
+            <i class="fa-solid fa-check me-1"></i> Mark
+          </button>
           <button class="btn btn-sm btn-outline-danger" onclick="deleteStudent('${sId}')" title="Delete Student">
             <i class="fa-solid fa-trash"></i>
           </button>
@@ -401,6 +407,34 @@ function renderStudentsTable(students) {
     `;
   }).join('');
 }
+
+window.quickMarkAttendance = async function(sId) {
+  try {
+    const res = await fetch('/api/attendance/mark', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        studentId: sId,
+        student_id: sId,
+        device: 'Manual Quick Mark',
+        confidence: 100
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      window.showToast(data.message || `✔ Attendance marked Present!`, 'success');
+      if (window.loadAttendanceHistory) window.loadAttendanceHistory();
+      if (window.loadDashboardStats) window.loadDashboardStats();
+      if (window.loadNotificationDashboard) window.loadNotificationDashboard();
+    } else {
+      window.showToast(data.message || 'Attendance already marked today.', 'warning');
+      if (window.loadAttendanceHistory) window.loadAttendanceHistory();
+    }
+  } catch (err) {
+    console.error('Quick mark error:', err);
+    window.showToast('Server error marking attendance.', 'danger');
+  }
+};
 
 // Student Directory Search Event Listeners
 document.getElementById('student-search-input')?.addEventListener('input', loadStudentsDirectory);
@@ -566,16 +600,19 @@ function initExportHandlers() {
     const element = document.getElementById('history-printable-area');
     if (!element) return;
 
-    const opt = {
-      margin: 0.5,
-      filename: `Attendance_Report_${new Date().toISOString().split('T')[0]}.pdf`,
-      image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
-      jsPDF: { unit: 'in', format: 'letter', orientation: 'landscape' }
-    };
-
-    window.html2pdf().set(opt).from(element).save();
-    window.showToast('PDF report exported successfully!', 'success');
+    if (typeof window.html2pdf === 'function') {
+      const opt = {
+        margin: 0.5,
+        filename: `Attendance_Report_${new Date().toISOString().split('T')[0]}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'in', format: 'letter', orientation: 'landscape' }
+      };
+      window.html2pdf().set(opt).from(element).save();
+      window.showToast('PDF report exported successfully!', 'success');
+    } else {
+      window.print();
+    }
   });
 
   // Print Window
@@ -697,8 +734,12 @@ function initMobileAndQR() {
           if (empty) empty.remove();
           mobileFeed.insertBefore(item, mobileFeed.firstChild);
         }
+        if (window.loadAttendanceHistory) window.loadAttendanceHistory();
+        if (window.loadDashboardStats) window.loadDashboardStats();
+        if (window.loadNotificationDashboard) window.loadNotificationDashboard();
       } else {
         window.showToast(data.message || 'Failed to mark attendance for Roll Number.', 'danger');
+        if (window.loadAttendanceHistory) window.loadAttendanceHistory();
       }
     } catch (err) {
       window.showToast('Server error recording manual attendance.', 'danger');
