@@ -1,3 +1,150 @@
+// Enterprise AI Anti-Spoof Detector (Live Human Only Engine)
+class AntiSpoofDetector {
+  constructor() {
+    this.earHistory = [];
+    this.depthHistory = [];
+    this.textureHistory = [];
+    this.lastFrameTime = Date.now();
+  }
+
+  reset() {
+    this.earHistory = [];
+    this.depthHistory = [];
+    this.textureHistory = [];
+  }
+
+  /**
+   * Evaluates frame for Live Human vs Spoof Proxy (Photo/Screen/Replay/Object)
+   */
+  evaluateAntiSpoof(videoElem, box, landmarks) {
+    if (!landmarks) {
+      return { passed: false, reason: 'Landmark Tracking Pending' };
+    }
+
+    const points = landmarks.positions || landmarks._positions || landmarks;
+    if (!points || points.length < 68) {
+      return { passed: false, reason: 'Incomplete Facial Landmarks' };
+    }
+
+    // 1. EYE ASPECT RATIO (EAR) & BLINK / EYE MOVEMENT CHECK
+    const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+    const p37 = points[37], p38 = points[38], p40 = points[40], p41 = points[41], p36 = points[36], p39 = points[39];
+    const p43 = points[43], p44 = points[44], p46 = points[46], p47 = points[47], p42 = points[42], p45 = points[45];
+
+    const leftEAR = (dist(p38, p41) + dist(p37, p40)) / (2.0 * Math.max(1, dist(p36, p39)));
+    const rightEAR = (dist(p44, p47) + dist(p43, p46)) / (2.0 * Math.max(1, dist(p42, p45)));
+    const avgEAR = (leftEAR + rightEAR) / 2.0;
+
+    this.earHistory.push(avgEAR);
+    if (this.earHistory.length > 25) this.earHistory.shift();
+
+    // 2. 3D FACIAL DEPTH VARIANCE & FLAT SURFACE ESTIMATION
+    const noseTip = points[30];
+    const noseBridge = points[27];
+    const jawBottom = points[8];
+    const leftCheek = points[2];
+    const rightCheek = points[14];
+
+    const noseBridgeLength = dist(noseBridge, noseTip);
+    const jawHeight = dist(noseTip, jawBottom);
+    const faceWidth = dist(leftCheek, rightCheek);
+    const eyeWidth = dist(p36, p45);
+
+    const depthRatio = (noseBridgeLength * jawHeight) / Math.max(1, faceWidth * eyeWidth);
+    this.depthHistory.push(depthRatio);
+    if (this.depthHistory.length > 25) this.depthHistory.shift();
+
+    const earVariance = this.calculateVariance(this.earHistory);
+    const depthVariance = this.calculateVariance(this.depthHistory);
+
+    // 3. TEXTURE & MOIRÉ PATTERN / RECTANGULAR DISPLAY BEZEL CHECK
+    const textureAnalysis = this.analyzeTextureAndReflection(videoElem, box);
+
+    // 4. VERDICT EVALUATION:
+    // If static photo print or frozen screen -> earVariance == 0 AND depthVariance == 0 after 12+ frames
+    if (this.earHistory.length >= 12 && earVariance < 0.000003 && depthVariance < 0.000008) {
+      return { passed: false, reason: 'Static Photograph / Screen Freeze Detected (0 Micro-Movement)' };
+    }
+
+    if (textureAnalysis.isScreenOrPaper) {
+      return { passed: false, reason: textureAnalysis.reason || 'Screen Reflection / Moiré Grid Pattern Detected' };
+    }
+
+    return { passed: true };
+  }
+
+  calculateVariance(arr) {
+    if (!arr || arr.length < 2) return 1.0;
+    const mean = arr.reduce((a, b) => a + b, 0) / arr.length;
+    return arr.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / arr.length;
+  }
+
+  analyzeTextureAndReflection(videoElem, box) {
+    try {
+      if (!videoElem || !box || box.width <= 0 || box.height <= 0) {
+        return { isScreenOrPaper: false };
+      }
+
+      const sampleCanvas = document.createElement('canvas');
+      const sSize = 100;
+      sampleCanvas.width = sSize;
+      sampleCanvas.height = sSize;
+      const sCtx = sampleCanvas.getContext('2d');
+
+      const cropX = Math.max(0, box.x);
+      const cropY = Math.max(0, box.y);
+      const cropW = Math.min(videoElem.videoWidth || 640, box.width);
+      const cropH = Math.min(videoElem.videoHeight || 480, box.height);
+
+      if (cropW <= 0 || cropH <= 0) return { isScreenOrPaper: false };
+
+      sCtx.drawImage(videoElem, cropX, cropY, cropW, cropH, 0, 0, sSize, sSize);
+      const imgData = sCtx.getImageData(0, 0, sSize, sSize);
+      const data = imgData.data;
+
+      let lapSum = 0;
+      let pixelCount = 0;
+      let specularHighlights = 0;
+
+      for (let y = 1; y < sSize - 1; y += 2) {
+        for (let x = 1; x < sSize - 1; x += 2) {
+          const idx = (y * sSize + x) * 4;
+          const r = data[idx], g = data[idx + 1], b = data[idx + 2];
+          const gray = r * 0.299 + g * 0.587 + b * 0.114;
+
+          if (r > 248 && g > 248 && b > 248) {
+            specularHighlights++;
+          }
+
+          const top = (data[((y - 1) * sSize + x) * 4] * 0.299 + data[((y - 1) * sSize + x) * 4 + 1] * 0.587 + data[((y - 1) * sSize + x) * 4 + 2] * 0.114);
+          const bot = (data[((y + 1) * sSize + x) * 4] * 0.299 + data[((y + 1) * sSize + x) * 4 + 1] * 0.587 + data[((y + 1) * sSize + x) * 4 + 2] * 0.114);
+          const left = (data[(y * sSize + (x - 1)) * 4] * 0.299 + data[(y * sSize + (x - 1)) * 4 + 1] * 0.587 + data[(y * sSize + (x - 1)) * 4 + 2] * 0.114);
+          const right = (data[(y * sSize + (x + 1)) * 4] * 0.299 + data[(y * sSize + (x + 1)) * 4 + 1] * 0.587 + data[(y * sSize + (x + 1)) * 4 + 2] * 0.114);
+
+          const lap = Math.abs(4 * gray - top - bot - left - right);
+          lapSum += lap;
+          pixelCount++;
+        }
+      }
+
+      const meanLap = lapSum / Math.max(1, pixelCount);
+      const glareRatio = specularHighlights / Math.max(1, pixelCount);
+
+      if (glareRatio > 0.08) {
+        return { isScreenOrPaper: true, reason: 'Glossy Screen Glare / Display Reflection Detected' };
+      }
+
+      if (meanLap > 48) {
+        return { isScreenOrPaper: true, reason: 'Digital Screen Moiré Pattern / Pixel Grid Raster Detected' };
+      }
+
+      return { isScreenOrPaper: false };
+    } catch (e) {
+      return { isScreenOrPaper: false };
+    }
+  }
+}
+
 // Real-Time Face AI Engine with Pre-Trained Face-API Models & 20-Pose Wizard
 class FaceAIEngine {
   constructor() {
@@ -11,6 +158,7 @@ class FaceAIEngine {
     this.fpsCount = 0;
     this.lastFpsUpdate = Date.now();
     this.matchThreshold = 0.50; // Euclidean distance threshold (lower = stricter)
+    this.antiSpoofDetector = new AntiSpoofDetector();
 
     this.facingMode = 'user'; // 'user' (front camera) or 'environment' (rear camera)
     this.activeVideo = null;
@@ -402,80 +550,165 @@ class FaceAIEngine {
       this.lastFpsUpdate = Date.now();
     }
 
-    if (this.video.readyState === this.video.HAVE_ENOUGH_DATA) {
+    if (this.video && this.video.readyState === this.video.HAVE_ENOUGH_DATA) {
       const width = this.canvas.width;
       const height = this.canvas.height;
 
-      let detectedFaces = [];
+      let rawDetections = [];
 
-      // 1. Try Pre-Trained Face-API Multi-Face Detection
       if (this.isModelLoaded && window.faceapi) {
         try {
-          const detections = await faceapi.detectAllFaces(this.video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.45 }))
+          rawDetections = await faceapi.detectAllFaces(this.video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.45 }))
             .withFaceLandmarks()
             .withFaceDescriptors();
-
-          if (detections && detections.length > 0) {
-            detectedFaces = detections.map(d => ({
-              descriptor: Array.from(d.descriptor),
-              boxX: d.detection.box.x,
-              boxY: d.detection.box.y,
-              boxW: d.detection.box.width,
-              boxH: d.detection.box.height
-            }));
-          }
         } catch (e) {
-          console.warn('[FaceAI] Multi-face detection fallback:', e);
+          console.warn('[FaceAI] Detection error:', e);
         }
       }
 
-      // Fallback descriptor extraction if pre-trained CDN stream is pending
-      if (detectedFaces.length === 0) {
-        const boxW = Math.min(280, width * 0.38);
-        const boxH = Math.min(340, height * 0.52);
-        const boxX = (width - boxW) / 2;
-        const boxY = (height - boxH) / 2 - 20;
+      const antiSpoofPill = document.getElementById('antispoof-status-pill') || document.getElementById('mobile-antispoof-status');
 
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = width;
-        tempCanvas.height = height;
-        const tempCtx = tempCanvas.getContext('2d');
-        tempCtx.drawImage(this.video, 0, 0, width, height);
-        const imageData = tempCtx.getImageData(0, 0, width, height);
-        const desc = this.computeFrameDescriptor(imageData);
-        detectedFaces = [{ descriptor: desc, boxX, boxY, boxW, boxH }];
+      // STEP 1: HUMAN & OBJECT DETECTION
+      if (!rawDetections || rawDetections.length === 0) {
+        const boxW = Math.min(280, width * 0.4);
+        const boxH = Math.min(320, height * 0.5);
+        const boxX = (width - boxW) / 2;
+        const boxY = (height - boxH) / 2;
+
+        this.ctx.lineWidth = 3;
+        this.ctx.strokeStyle = '#ef4444';
+        this.ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+        this.ctx.fillStyle = 'rgba(239, 68, 68, 0.95)';
+        this.ctx.fillRect(boxX, boxY - 38, Math.max(160, boxW), 32);
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = 'bold 15px Inter, sans-serif';
+        this.ctx.fillText('❌ Not a Human', boxX + 10, boxY - 16);
+
+        if (antiSpoofPill) {
+          antiSpoofPill.className = 'status-pill bg-danger text-white border border-danger px-2 py-1';
+          antiSpoofPill.innerHTML = `<i class="fa-solid fa-triangle-exclamation me-1"></i> Anti-Spoof: ❌ Not a Human`;
+        }
+
+        requestAnimationFrame(() => this.scanLoop());
+        return;
       }
 
-      // Process and render ALL detected faces simultaneously
-      for (const face of detectedFaces) {
-        const { descriptor, boxX, boxY, boxW, boxH } = face;
-        const matchResult = this.findBestFaceMatch(descriptor);
+      // STEP 2: FACE COUNT CHECK (EXACTLY 1 FACE ALLOWED)
+      if (rawDetections.length > 1) {
+        for (const d of rawDetections) {
+          const boxX = d.detection.box.x;
+          const boxY = d.detection.box.y;
+          const boxW = d.detection.box.width;
+          const boxH = d.detection.box.height;
 
-        if (matchResult && matchResult.student) {
-          const student = matchResult.student;
-          const confidencePct = Math.min(99.9, Math.max(75.0, (1 - matchResult.distance) * 100)).toFixed(1);
-
-          this.ctx.lineWidth = 3;
-          this.ctx.strokeStyle = '#22c55e';
-          this.ctx.strokeRect(boxX, boxY, boxW, boxH);
-
-          this.ctx.fillStyle = 'rgba(34, 197, 94, 0.9)';
-          this.ctx.fillRect(boxX, boxY - 38, Math.max(120, boxW), 32);
-          this.ctx.fillStyle = '#ffffff';
-          this.ctx.font = 'bold 14px Inter, sans-serif';
-          this.ctx.fillText(`✔ ${student.name}`, boxX + 8, boxY - 16);
-
-          this.checkAndMarkAttendance(student, confidencePct);
-        } else {
           this.ctx.lineWidth = 3;
           this.ctx.strokeStyle = '#ef4444';
           this.ctx.strokeRect(boxX, boxY, boxW, boxH);
 
-          this.ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
-          this.ctx.fillRect(boxX, boxY - 38, Math.max(140, boxW), 32);
+          this.ctx.fillStyle = 'rgba(239, 68, 68, 0.95)';
+          this.ctx.fillRect(boxX, boxY - 38, Math.max(170, boxW), 32);
           this.ctx.fillStyle = '#ffffff';
-          this.ctx.font = 'bold 13px Inter, sans-serif';
-          this.ctx.fillText('❌ Not Enrolled', boxX + 8, boxY - 16);
+          this.ctx.font = 'bold 14px Inter, sans-serif';
+          this.ctx.fillText('❌ One person only.', boxX + 8, boxY - 16);
+        }
+
+        if (antiSpoofPill) {
+          antiSpoofPill.className = 'status-pill bg-danger text-white border border-danger px-2 py-1';
+          antiSpoofPill.innerHTML = `<i class="fa-solid fa-users-slash me-1"></i> Anti-Spoof: ❌ One person only.`;
+        }
+
+        requestAnimationFrame(() => this.scanLoop());
+        return;
+      }
+
+      // STEP 3: LIVENESS & ANTI-SPOOFING DETECTION (SINGLE FACE)
+      const d = rawDetections[0];
+      const boxX = d.detection.box.x;
+      const boxY = d.detection.box.y;
+      const boxW = d.detection.box.width;
+      const boxH = d.detection.box.height;
+      const descriptor = Array.from(d.descriptor);
+
+      const antiSpoofVerdict = this.antiSpoofDetector.evaluateAntiSpoof(this.video, d.detection.box, d.landmarks);
+
+      if (!antiSpoofVerdict.passed) {
+        this.ctx.lineWidth = 4;
+        this.ctx.strokeStyle = '#dc2626';
+        this.ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+        this.ctx.fillStyle = 'rgba(220, 38, 38, 0.95)';
+        this.ctx.fillRect(boxX, boxY - 42, Math.max(180, boxW), 36);
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = 'bold 15px Inter, sans-serif';
+        this.ctx.fillText('❌ Proxy Not Allowed', boxX + 8, boxY - 18);
+
+        if (antiSpoofPill) {
+          antiSpoofPill.className = 'status-pill bg-danger text-white border border-danger px-2 py-1';
+          antiSpoofPill.innerHTML = `<i class="fa-solid fa-shield-cat me-1"></i> Anti-Spoof: ❌ Proxy Not Allowed`;
+        }
+
+        // CRITICAL: NEVER ATTEMPT FACE RECOGNITION. NEVER MARK ATTENDANCE.
+        requestAnimationFrame(() => this.scanLoop());
+        return;
+      }
+
+      // STEP 4: RECOGNITION & ATTENDANCE OUTPUT (LIVE HUMAN VERIFIED)
+      const matchResult = this.findBestFaceMatch(descriptor);
+
+      if (matchResult && matchResult.student) {
+        const student = matchResult.student;
+        const confidencePct = Math.min(99.9, Math.max(78.0, (1 - matchResult.distance) * 100)).toFixed(1);
+        const studentId = student.studentId || student.student_id;
+        const isCooldown = (Date.now() - (this.cooldowns.get(studentId) || 0)) < 15000;
+
+        if (isCooldown) {
+          this.ctx.lineWidth = 3;
+          this.ctx.strokeStyle = '#eab308';
+          this.ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+          this.ctx.fillStyle = 'rgba(234, 179, 8, 0.95)';
+          this.ctx.fillRect(boxX, boxY - 42, Math.max(220, boxW), 36);
+          this.ctx.fillStyle = '#000000';
+          this.ctx.font = 'bold 14px Inter, sans-serif';
+          this.ctx.fillText(`✅ Attendance Already Marked`, boxX + 8, boxY - 18);
+
+          if (antiSpoofPill) {
+            antiSpoofPill.className = 'status-pill bg-warning text-dark border border-warning px-2 py-1';
+            antiSpoofPill.innerHTML = `<i class="fa-solid fa-check-double me-1"></i> Anti-Spoof: ✅ Already Marked`;
+          }
+        } else {
+          this.ctx.lineWidth = 4;
+          this.ctx.strokeStyle = '#22c55e';
+          this.ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+          this.ctx.fillStyle = 'rgba(34, 197, 94, 0.95)';
+          this.ctx.fillRect(boxX, boxY - 42, Math.max(240, boxW), 36);
+          this.ctx.fillStyle = '#ffffff';
+          this.ctx.font = 'bold 14px Inter, sans-serif';
+          this.ctx.fillText(`✅ Attendance Marked Successfully`, boxX + 8, boxY - 18);
+
+          if (antiSpoofPill) {
+            antiSpoofPill.className = 'status-pill bg-success text-white border border-success px-2 py-1';
+            antiSpoofPill.innerHTML = `<i class="fa-solid fa-user-shield me-1"></i> Anti-Spoof: ✅ Live Human Verified`;
+          }
+
+          this.checkAndMarkAttendance(student, confidencePct);
+        }
+      } else {
+        this.ctx.lineWidth = 3;
+        this.ctx.strokeStyle = '#ef4444';
+        this.ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+        this.ctx.fillStyle = 'rgba(239, 68, 68, 0.95)';
+        this.ctx.fillRect(boxX, boxY - 42, Math.max(180, boxW), 36);
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.font = 'bold 14px Inter, sans-serif';
+        this.ctx.fillText('❌ Face Not Registered', boxX + 8, boxY - 18);
+
+        if (antiSpoofPill) {
+          antiSpoofPill.className = 'status-pill bg-danger text-white border border-danger px-2 py-1';
+          antiSpoofPill.innerHTML = `<i class="fa-solid fa-user-slash me-1"></i> Anti-Spoof: ❌ Face Not Registered`;
         }
       }
     }

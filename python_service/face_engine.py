@@ -75,14 +75,51 @@ def detect_faces(image_path):
         "faces": results
     }
 
+def detect_anti_spoof(image_path):
+    if cv2 is None or not os.path.exists(image_path):
+        return {"error": "Image file unavailable or cv2 missing"}
+        
+    image = cv2.imread(image_path)
+    if image is None:
+        return {"error": "Failed to decode image file"}
+        
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+    face_cascade = cv2.CascadeClassifier(cascade_path)
+    
+    faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+    
+    if len(faces) == 0:
+        return {"is_human": False, "face_count": 0, "is_live": False, "status": "NOT_HUMAN", "message": "❌ Not a Human"}
+        
+    if len(faces) > 1:
+        return {"is_human": True, "face_count": len(faces), "is_live": False, "status": "MULTIPLE_FACES", "message": "❌ One person only."}
+        
+    x, y, w, h = faces[0]
+    face_roi = gray[y:y+h, x:x+w]
+    laplacian_var = cv2.Laplacian(face_roi, cv2.CV_64F).var()
+    
+    face_color = image[y:y+h, x:x+w]
+    glare_mask = cv2.inRange(face_color, (245, 245, 245), (255, 255, 255))
+    glare_ratio = np.sum(glare_mask > 0) / float(w * h)
+    
+    if glare_ratio > 0.08 or laplacian_var > 350:
+        return {"is_human": True, "face_count": 1, "is_live": False, "status": "PROXY_SPOOF", "message": "❌ Proxy Not Allowed"}
+        
+    return {"is_human": True, "face_count": 1, "is_live": True, "status": "PASSED", "message": "✅ Live Human Verified"}
+
 def main():
     parser = argparse.ArgumentParser(description="AI Face Detection & Feature Extraction Engine")
-    parser.add_argument("--action", choices=["detect", "extract"], default="detect", help="Processing action")
+    parser.add_argument("--action", choices=["detect", "extract", "antispoof"], default="detect", help="Processing action")
     parser.add_argument("--image", type=str, required=True, help="Path to input face image file")
     
     args = parser.parse_args()
     
-    res = detect_faces(args.image)
+    if args.action == "antispoof":
+        res = detect_anti_spoof(args.image)
+    else:
+        res = detect_faces(args.image)
+        
     print(json.dumps(res, indent=2))
 
 if __name__ == "__main__":
