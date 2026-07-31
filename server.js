@@ -80,19 +80,24 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Initialize Database and Start Server on all interfaces (0.0.0.0)
-initDatabase()
-  .then(() => {
-    const localIp = getLocalIpAddress();
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log(`====================================================`);
-      console.log(`🚀 Face Detection Attendance System running!`);
-      console.log(`🌐 Local Web Server: http://localhost:${PORT}`);
-      console.log(`📱 Mobile Network:   http://${localIp}:${PORT}?mode=mobile`);
-      console.log(`====================================================`);
+// Export app and initDatabase for serverless/Firebase Cloud Functions deployment
+module.exports = { app, initDatabase };
+
+// Start server if run directly (e.g. node server.js)
+if (require.main === module) {
+  initDatabase()
+    .then(() => {
+      const localIp = getLocalIpAddress();
+      app.listen(PORT, '0.0.0.0', () => {
+        console.log(`====================================================`);
+        console.log(`🚀 Face Detection Attendance System running!`);
+        console.log(`🌐 Local Web Server: http://localhost:${PORT}`);
+        console.log(`📱 Mobile Network:   http://${localIp}:${PORT}?mode=mobile`);
+        console.log(`====================================================`);
+      });
+    })
+    .catch((err) => {
+      console.error('Failed to initialize database:', err);
+      process.exit(1);
     });
-  })
-  .catch((err) => {
-    console.error('Failed to initialize database:', err);
-    process.exit(1);
-  });
+}

@@ -5,3 +5,5 @@ node_modules/
 db/*.db
 uploads/faces/*
 !uploads/faces/.gitkeep
+.firebase/
+
