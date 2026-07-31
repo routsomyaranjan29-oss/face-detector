@@ -85,7 +85,7 @@ router.get('/dashboard', async (req, res) => {
     const totalStudents = totalStudentsRow ? totalStudentsRow.count : 0;
 
     const presentTodayRow = await dbGet(
-      'SELECT COUNT(DISTINCT student_id) as count FROM attendance WHERE date = ? AND status IN ("Present", "Late")',
+      'SELECT COUNT(DISTINCT student_id) as count FROM attendance WHERE date = ? AND status IN ("Present", "Late", "Early")',
       [today]
     );
     const presentToday = presentTodayRow ? presentTodayRow.count : 0;
@@ -113,7 +113,7 @@ router.get('/dashboard', async (req, res) => {
         SELECT COUNT(DISTINCT a.student_id) as present_count
         FROM attendance a
         JOIN students s ON a.student_id = s.student_id
-        WHERE a.date = ? AND (s.branch = ? OR s.department = ?) AND a.status IN ("Present", "Late")
+        WHERE a.date = ? AND (s.branch = ? OR s.department = ?) AND a.status IN ("Present", "Late", "Early")
       `, [today, bName, bName]);
 
       const present = pRow ? pRow.present_count : 0;
@@ -132,7 +132,7 @@ router.get('/dashboard', async (req, res) => {
     for (let i = 6; i >= 0; i--) {
       const dDate = new Date(Date.now() - i * 86400000).toISOString().split('T')[0];
       const countRow = await dbGet(
-        'SELECT COUNT(DISTINCT student_id) as count FROM attendance WHERE date = ? AND status IN ("Present", "Late")',
+        'SELECT COUNT(DISTINCT student_id) as count FROM attendance WHERE date = ? AND status IN ("Present", "Late", "Early")',
         [dDate]
       );
       const dayName = new Date(dDate).toLocaleDateString('en-US', { weekday: 'short' });

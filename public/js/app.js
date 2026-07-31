@@ -496,9 +496,10 @@ function renderAttendanceHistoryTable(logs) {
     const device = l.device || l.mode || 'Webcam';
     const conf = l.confidence ? `${l.confidence}%` : '98.5%';
 
-    let statusBadge = '<span class="badge bg-success">Present</span>';
-    if (l.status === 'Late') statusBadge = '<span class="badge bg-warning text-dark">Late</span>';
-    if (l.status === 'Absent') statusBadge = '<span class="badge bg-danger">Absent</span>';
+    let statusBadge = '<span class="badge bg-success"><i class="fa-solid fa-check me-1"></i> Present</span>';
+    if (l.status === 'Early') statusBadge = '<span class="badge bg-info text-dark"><i class="fa-solid fa-clock me-1"></i> Early</span>';
+    if (l.status === 'Late') statusBadge = '<span class="badge bg-warning text-dark"><i class="fa-solid fa-clock-rotate-left me-1"></i> Late</span>';
+    if (l.status === 'Absent') statusBadge = '<span class="badge bg-danger"><i class="fa-solid fa-xmark me-1"></i> Absent</span>';
 
     const notifBadges = `
       <span class="badge-mini bg-info mb-1" title="Email Alert Delivered"><i class="fa-solid fa-envelope me-1"></i> Email</span>

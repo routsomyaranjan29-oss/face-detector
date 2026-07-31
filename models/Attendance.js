@@ -9,7 +9,7 @@ const attendanceSchema = new mongoose.Schema({
   date: { type: String, required: true }, // Format: YYYY-MM-DD
   time: { type: String, required: true }, // Format: HH:MM:SS AM/PM
   timestamp: { type: Number, required: true },
-  status: { type: String, enum: ['Present', 'Late', 'Absent', 'Check-Out'], required: true },
+  status: { type: String, enum: ['Present', 'Late', 'Early', 'Absent', 'Check-Out'], required: true },
   device: { type: String, default: 'Webcam' },
   confidence: { type: Number, default: 95.0 },
   locationLat: { type: Number },

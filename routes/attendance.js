@@ -28,11 +28,13 @@ router.post('/mark', async (req, res) => {
     const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const currentTimestamp = now.getTime();
 
-    // Determine status (Present vs Late)
+    // Determine status (Timing Schedule: 9:00 AM to 3:00 PM)
+    // Before 9:00 AM => 'Early'
+    // 9:00 AM or later => 'Late'
     const hour = now.getHours();
-    const minute = now.getMinutes();
-    const isLate = (hour > 9) || (hour === 9 && minute > 15);
-    const status = isLate ? 'Late' : 'Present';
+    const calculatedStatus = (hour < 9) ? 'Early' : 'Late';
+    const reqStatus = req.body.status;
+    const status = (reqStatus && ['Early', 'Late', 'Present', 'Absent'].includes(reqStatus)) ? reqStatus : calculatedStatus;
 
     // 1. MongoDB Execution Path
     if (process.env.MONGODB_URI) {
@@ -48,7 +50,7 @@ router.post('/mark', async (req, res) => {
       const existingAttendance = await AttendanceModel.findOne({
         studentId: student.studentId,
         date: dateStr,
-        status: { $in: ['Present', 'Late'] }
+        status: { $in: ['Present', 'Late', 'Early'] }
       });
 
       if (existingAttendance) {
@@ -106,7 +108,7 @@ router.post('/mark', async (req, res) => {
 
     // Check duplicate attendance for today
     const existingLog = await dbGet(
-      `SELECT * FROM attendance WHERE student_id = ? AND date = ? AND status IN ('Present', 'Late') ORDER BY id DESC LIMIT 1`,
+      `SELECT * FROM attendance WHERE student_id = ? AND date = ? AND status IN ('Present', 'Late', 'Early') ORDER BY id DESC LIMIT 1`,
       [student.student_id, dateStr]
     );
 
