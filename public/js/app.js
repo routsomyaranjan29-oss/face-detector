@@ -685,10 +685,31 @@ function initMobileAndQR() {
     }
   });
 
-  // Open Mobile View Tab from Modal
+  // Open Mobile View Simulator Window & Tab from Modal
   document.getElementById('btn-open-mobile-tab')?.addEventListener('click', () => {
     document.getElementById('modal-qr-code')?.classList.remove('show');
+    
+    // 1. Switch to Mobile Scanner tab in main window
     window.switchTab('mobile-attendance');
+
+    // 2. Open Mobile Device Preview Popup Window (Smartphone viewport 412x846)
+    const mobileUrl = document.getElementById('qr-target-url')?.textContent || `${window.location.origin}?mode=mobile`;
+    const popupWidth = 412;
+    const popupHeight = 846;
+    const left = Math.max(0, Math.floor((window.screen.width - popupWidth) / 2));
+    const top = Math.max(0, Math.floor((window.screen.height - popupHeight) / 2));
+
+    try {
+      window.open(
+        mobileUrl,
+        'VisioFaceMobilePreview',
+        `width=${popupWidth},height=${popupHeight},left=${left},top=${top},resizable=yes,scrollbars=yes,status=no,toolbar=no,menubar=no`
+      );
+      window.showToast('📱 Mobile Device Preview Simulator launched!', 'success');
+    } catch (e) {
+      console.warn('Popup blocked, falling back to tab view.');
+      window.showToast('Mobile View opened in tab.', 'info');
+    }
   });
 
   // Manual Roll Number Verification on Mobile
@@ -766,9 +787,10 @@ async function openAttendanceQRModal() {
   // Clear previous QR code
   qrContainer.innerHTML = '';
 
+  // Default to current browser origin (works for any hostname, domain, IP, or tunnel)
   let mobileUrl = `${window.location.protocol}//${window.location.host}?mode=mobile`;
 
-  // Fetch local LAN IP from server endpoint so phone camera can scan over Wi-Fi
+  // Fetch local LAN IP from server endpoint so phone camera can scan over Wi-Fi/Hotspot
   try {
     const res = await fetch('/api/info');
     const data = await res.json();
@@ -786,8 +808,8 @@ async function openAttendanceQRModal() {
   if (window.QRCode) {
     new QRCode(qrContainer, {
       text: mobileUrl,
-      width: 180,
-      height: 180,
+      width: 190,
+      height: 190,
       colorDark: '#0f172a',
       colorLight: '#ffffff',
       correctLevel: QRCode.CorrectLevel.H
@@ -795,7 +817,8 @@ async function openAttendanceQRModal() {
   } else {
     // Fallback QR Code image generator if CDN is unavailable
     const fallbackImg = document.createElement('img');
-    fallbackImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(mobileUrl)}`;
+    fallbackImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=190x190&data=${encodeURIComponent(mobileUrl)}`;
+    fallbackImg.alt = 'Mobile Attendance QR Code';
     qrContainer.appendChild(fallbackImg);
   }
 

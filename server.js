@@ -10,17 +10,27 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Helper function to extract machine's local IPv4 network address
-function getLocalIpAddress() {
+// Helper function to extract machine's local IPv4 network addresses (prioritizing Wi-Fi & LAN)
+function getLocalIpAddresses() {
   const interfaces = os.networkInterfaces();
+  const addresses = [];
   for (const name of Object.keys(interfaces)) {
     for (const iface of interfaces[name]) {
       if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
+        addresses.push(iface.address);
       }
     }
   }
-  return '127.0.0.1';
+  addresses.sort((a, b) => {
+    if (a.startsWith('192.168.') || a.startsWith('10.')) return -1;
+    if (b.startsWith('192.168.') || b.startsWith('10.')) return 1;
+    return 0;
+  });
+  return addresses.length > 0 ? addresses : ['127.0.0.1'];
+}
+
+function getLocalIpAddress() {
+  return getLocalIpAddresses()[0];
 }
 
 // Middleware
@@ -49,12 +59,14 @@ app.use('/api/notifications', notificationRoutes);
 
 // Endpoint for Mobile QR Code Network URL
 app.get('/api/info', (req, res) => {
-  const localIp = getLocalIpAddress();
+  const ips = getLocalIpAddresses();
+  const mainIp = ips[0];
   res.json({
     success: true,
-    localIp,
+    localIp: mainIp,
+    allIps: ips,
     port: PORT,
-    mobileUrl: `http://${localIp}:${PORT}?mode=mobile`
+    mobileUrl: `http://${mainIp}:${PORT}?mode=mobile`
   });
 });
 
