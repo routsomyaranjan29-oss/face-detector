@@ -1023,7 +1023,12 @@ function renderNotificationLogsTable(logs) {
     let statusBadge = `<span class="badge bg-success"><i class="fa-solid fa-circle-check me-1"></i> Sent</span>`;
     if (item.status === 'Failed') statusBadge = `<span class="badge bg-danger"><i class="fa-solid fa-circle-xmark me-1"></i> Failed</span>`;
 
-    const pName = item.parentName && item.parentName !== 'Parent / Guardian' ? item.parentName : `${item.studentName}'s Parent`;
+    let pName = 'Parent / Guardian';
+    if (item.parentName && item.parentName.trim() !== '' && item.parentName !== 'Parent / Guardian' && !item.parentName.endsWith(' Guardian')) {
+      pName = item.parentName;
+    } else if (item.studentName) {
+      pName = `${item.studentName}'s Parent`;
+    }
     
     const contactParts = [];
     if (item.email) contactParts.push(item.email);
