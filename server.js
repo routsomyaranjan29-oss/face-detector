@@ -13,20 +13,25 @@ const PORT = process.env.PORT || 3000;
 // Helper function to extract machine's local IPv4 network addresses (prioritizing Wi-Fi & LAN)
 function getLocalIpAddresses() {
   const interfaces = os.networkInterfaces();
-  const addresses = [];
+  const list = [];
   for (const name of Object.keys(interfaces)) {
     for (const iface of interfaces[name]) {
       if (iface.family === 'IPv4' && !iface.internal) {
-        addresses.push(iface.address);
+        list.push({ name, address: iface.address });
       }
     }
   }
-  addresses.sort((a, b) => {
-    if (a.startsWith('192.168.') || a.startsWith('10.')) return -1;
-    if (b.startsWith('192.168.') || b.startsWith('10.')) return 1;
+  list.sort((a, b) => {
+    const aName = a.name.toLowerCase();
+    const bName = b.name.toLowerCase();
+    if (aName.includes('wi-fi') || aName.includes('wifi') || aName.includes('wireless')) return -1;
+    if (bName.includes('wi-fi') || bName.includes('wifi') || bName.includes('wireless')) return 1;
+    if (a.address.startsWith('10.') || a.address.startsWith('192.168.')) return -1;
+    if (b.address.startsWith('10.') || b.address.startsWith('192.168.')) return 1;
     return 0;
   });
-  return addresses.length > 0 ? addresses : ['127.0.0.1'];
+  const addrs = list.map(item => item.address);
+  return addrs.length > 0 ? addrs : ['127.0.0.1'];
 }
 
 function getLocalIpAddress() {
