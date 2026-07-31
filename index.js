@@ -18,3 +18,21 @@ exports.api = onRequest({ cors: true, timeoutSeconds: 60, memory: '512MiB' }, as
   await ensureDb();
   return app(req, res);
 });
+
+// Fallback: If executed directly (e.g., node index.js on Render/PaaS)
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  initDatabase()
+    .then(() => {
+      app.listen(PORT, '0.0.0.0', () => {
+        console.log(`====================================================`);
+        console.log(`🚀 Face Detection Attendance System running on Render!`);
+        console.log(`🌐 Production Web Server listening on port ${PORT}`);
+        console.log(`====================================================`);
+      });
+    })
+    .catch((err) => {
+      console.error('Failed to initialize database on Render:', err);
+      process.exit(1);
+    });
+}
