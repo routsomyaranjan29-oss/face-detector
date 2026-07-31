@@ -25,7 +25,7 @@ const notificationSettings = {
 
 // Core Notification Dispatcher Function
 async function dispatchParentNotifications(studentData, attendanceRecord) {
-  const {
+  let {
     student_id, studentId,
     name, studentName,
     branch, department,
@@ -36,8 +36,24 @@ async function dispatchParentNotifications(studentData, attendanceRecord) {
   } = studentData;
 
   const sId = studentId || student_id;
+  
+  // If parent fields are missing, fetch directly from students table
+  if (!parent_name && !parentName && sId) {
+    try {
+      const dbStudent = await dbGet('SELECT * FROM students WHERE student_id = ? OR roll_number = ?', [sId, sId]);
+      if (dbStudent) {
+        parent_name = dbStudent.parent_name;
+        parent_email = dbStudent.parent_email;
+        parent_mobile = dbStudent.parent_mobile;
+        parent_whatsapp = dbStudent.parent_whatsapp;
+        name = name || dbStudent.name;
+        branch = branch || dbStudent.branch || dbStudent.department;
+      }
+    } catch (e) {}
+  }
+
   const sName = name || studentName || 'Student';
-  const pName = parentName || parent_name || 'Parent / Guardian';
+  const pName = parentName || parent_name || `${sName}'s Parent`;
   const pEmail = parentEmail || parent_email || '';
   const pMobile = parentMobile || parent_mobile || '';
   const pWhatsapp = parentWhatsapp || parent_whatsapp || pMobile;
@@ -47,98 +63,39 @@ async function dispatchParentNotifications(studentData, attendanceRecord) {
   const timeStr = attendanceRecord.time || new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
   const currentTimestamp = Date.now();
 
-  const results = {
-    email: { sent: false, status: 'Disabled', message: '' },
-    whatsapp: { sent: false, status: 'Disabled', message: '' },
-    sms: { sent: false, status: 'Disabled', message: '' }
+  const activeChannels = [];
+  if (notificationSettings.emailEnabled) activeChannels.push('Email');
+  if (notificationSettings.whatsappEnabled) activeChannels.push('WhatsApp');
+  if (notificationSettings.smsEnabled) activeChannels.push('SMS');
+
+  const combinedChannelStr = activeChannels.join(', ') || 'Email, WhatsApp, SMS';
+
+  const subject = `Attendance Alert: ${sName}`;
+  const message = `Hello ${pName},\nYour child ${sName} entered campus successfully.\nEntry Time: ${timeStr}\nDate: ${dateStr}\nDepartment: ${dept}\nStatus: Present`;
+
+  // Save 1 consolidated notification record for all channels
+  await saveNotificationRecord({
+    studentId: sId,
+    studentName: sName,
+    parentName: pName,
+    email: pEmail,
+    phoneNumber: pMobile,
+    whatsappNumber: pWhatsapp,
+    channel: combinedChannelStr,
+    subject,
+    message,
+    status: 'Sent',
+    errorMessage: '',
+    date: dateStr,
+    time: timeStr,
+    timestamp: currentTimestamp
+  });
+
+  return {
+    email: { sent: notificationSettings.emailEnabled, status: notificationSettings.emailEnabled ? 'Sent' : 'Disabled' },
+    whatsapp: { sent: notificationSettings.whatsappEnabled, status: notificationSettings.whatsappEnabled ? 'Sent' : 'Disabled' },
+    sms: { sent: notificationSettings.smsEnabled, status: notificationSettings.smsEnabled ? 'Sent' : 'Disabled' }
   };
-
-  // 1. Email Notification Message
-  if (notificationSettings.emailEnabled) {
-    const subject = `Attendance Confirmation`;
-    const message = `Hello Mr./Mrs. ${pName},\n\nThis is to inform you that your child ${sName} has successfully entered the campus.\n\nEntry Time: ${timeStr}\nDate: ${dateStr}\nDepartment: ${dept}\nStatus: Present\n\nThank you.\nAI Face Recognition Attendance System`;
-
-    let status = 'Sent';
-    let errorMessage = '';
-
-    results.email = { sent: true, status: 'Sent', message: 'Email sent to parent.' };
-
-    // Record Log to DB
-    await saveNotificationRecord({
-      studentId: sId,
-      studentName: sName,
-      parentName: pName,
-      email: pEmail,
-      phoneNumber: pMobile,
-      whatsappNumber: pWhatsapp,
-      channel: 'Email',
-      subject,
-      message,
-      status,
-      errorMessage,
-      date: dateStr,
-      time: timeStr,
-      timestamp: currentTimestamp
-    });
-  }
-
-  // 2. WhatsApp Notification Message
-  if (notificationSettings.whatsappEnabled) {
-    const subject = `WhatsApp Alert`;
-    const message = `Hello ${pName},\nYour child ${sName} has entered the campus.\n\n🕒 Time: ${timeStr} 📅 Date: ${dateStr}\nAttendance Status: ✅ Present\n\nThank you.`;
-
-    let status = 'Sent';
-    let errorMessage = '';
-
-    results.whatsapp = { sent: true, status: 'Sent', message: 'WhatsApp notification delivered.' };
-
-    await saveNotificationRecord({
-      studentId: sId,
-      studentName: sName,
-      parentName: pName,
-      email: pEmail,
-      phoneNumber: pMobile,
-      whatsappNumber: pWhatsapp,
-      channel: 'WhatsApp',
-      subject,
-      message,
-      status,
-      errorMessage,
-      date: dateStr,
-      time: timeStr,
-      timestamp: currentTimestamp
-    });
-  }
-
-  // 3. SMS Notification Message
-  if (notificationSettings.smsEnabled) {
-    const subject = `SMS Alert`;
-    const message = `Attendance Alert\n${sName} entered campus successfully.\nTime: ${timeStr}\nStatus: Present`;
-
-    let status = 'Sent';
-    let errorMessage = '';
-
-    results.sms = { sent: true, status: 'Sent', message: 'SMS notification delivered.' };
-
-    await saveNotificationRecord({
-      studentId: sId,
-      studentName: sName,
-      parentName: pName,
-      email: pEmail,
-      phoneNumber: pMobile,
-      whatsappNumber: pWhatsapp,
-      channel: 'SMS',
-      subject,
-      message,
-      status,
-      errorMessage,
-      date: dateStr,
-      time: timeStr,
-      timestamp: currentTimestamp
-    });
-  }
-
-  return results;
 }
 
 // Save Notification Log Record Helper

@@ -28,6 +28,10 @@ router.post('/enroll', async (req, res) => {
       mobile, phone,
       email,
       address,
+      parent_name, parentName,
+      parent_mobile, parentMobile,
+      parent_whatsapp, parentWhatsapp,
+      parent_email, parentEmail,
       descriptors, 
       sample_images, // Array of base64 images (poses 1 to 5)
       sample_image_base64,
@@ -38,6 +42,10 @@ router.post('/enroll', async (req, res) => {
     const rNum = rollNumber || roll_number;
     const regNum = registrationNumber || registration_number;
     const bName = branch || department;
+    const pName = parentName || parent_name || '';
+    const pMob = parentMobile || parent_mobile || '';
+    const pWhatsapp = parentWhatsapp || parent_whatsapp || pMob || '';
+    const pEmail = parentEmail || parent_email || '';
 
     if (!sId || !descriptors || !Array.isArray(descriptors) || descriptors.length === 0) {
       return res.status(400).json({ success: false, message: 'Student ID and face descriptors are required.' });
@@ -81,6 +89,10 @@ router.post('/enroll', async (req, res) => {
           mobile: mobile || phone || '',
           email: email || '',
           address: address || '',
+          parentName: pName,
+          parentMobile: pMob,
+          parentWhatsapp: pWhatsapp,
+          parentEmail: pEmail,
           photoPath: mainPhotoPath,
           posePhotos: savedPhotoPaths,
           faceEncoding: descriptors[0] || [],
@@ -92,6 +104,10 @@ router.post('/enroll', async (req, res) => {
         student.posePhotos = savedPhotoPaths.length > 0 ? savedPhotoPaths : student.posePhotos;
         student.faceEncoding = descriptors[0] || student.faceEncoding;
         student.descriptors = descriptors;
+        student.parentName = pName || student.parentName;
+        student.parentMobile = pMob || student.parentMobile;
+        student.parentWhatsapp = pWhatsapp || student.parentWhatsapp;
+        student.parentEmail = pEmail || student.parentEmail;
         student.faceEnrolled = true;
         await student.save();
       }
@@ -108,15 +124,19 @@ router.post('/enroll', async (req, res) => {
     let student = await dbGet('SELECT * FROM students WHERE student_id = ? OR roll_number = ?', [sId, rNum]);
     if (!student) {
       const sResult = await dbRun(
-        `INSERT INTO students (student_id, name, roll_number, registration_number, branch, department, semester, section, mobile, phone, email, address, photo_path, face_enrolled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-        [sId, name || sId, rNum || sId, regNum || `REG-${rNum}`, bName || 'General', bName || 'General', semester || '1', section || 'A', mobile || phone || '', mobile || phone || '', email || '', address || '', mainPhotoPath]
+        `INSERT INTO students (student_id, name, roll_number, registration_number, branch, department, semester, section, mobile, phone, email, address, photo_path, parent_name, parent_mobile, parent_whatsapp, parent_email, face_enrolled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+        [sId, name || sId, rNum || sId, regNum || `REG-${rNum}`, bName || 'General', bName || 'General', semester || '1', section || 'A', mobile || phone || '', mobile || phone || '', email || '', address || '', mainPhotoPath, pName, pMob, pWhatsapp, pEmail]
       );
-      student = { id: sResult.id, student_id: sId, name, roll_number: rNum, branch: bName, photo_path: mainPhotoPath };
+      student = { id: sResult.id, student_id: sId, name, roll_number: rNum, branch: bName, photo_path: mainPhotoPath, parent_name: pName, parent_mobile: pMob, parent_whatsapp: pWhatsapp, parent_email: pEmail };
     } else {
       await dbRun(
-        `UPDATE students SET face_enrolled = 1, photo_path = ? WHERE id = ?`,
-        [mainPhotoPath || student.photo_path, student.id]
+        `UPDATE students SET face_enrolled = 1, photo_path = ?, parent_name = COALESCE(NULLIF(?, ''), parent_name), parent_mobile = COALESCE(NULLIF(?, ''), parent_mobile), parent_whatsapp = COALESCE(NULLIF(?, ''), parent_whatsapp), parent_email = COALESCE(NULLIF(?, ''), parent_email) WHERE id = ?`,
+        [mainPhotoPath || student.photo_path, pName, pMob, pWhatsapp, pEmail, student.id]
       );
+      student.parent_name = pName || student.parent_name;
+      student.parent_mobile = pMob || student.parent_mobile;
+      student.parent_whatsapp = pWhatsapp || student.parent_whatsapp;
+      student.parent_email = pEmail || student.parent_email;
     }
 
     // Clear old embeddings for re-enrollment

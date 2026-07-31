@@ -981,26 +981,65 @@ function renderNotificationLogsTable(logs) {
     return;
   }
 
-  tbody.innerHTML = logs.map(l => {
-    let chanBadge = `<span class="badge bg-info"><i class="fa-solid fa-envelope me-1"></i> Email</span>`;
-    if (l.channel === 'WhatsApp') chanBadge = `<span class="badge bg-success"><i class="fa-brands fa-whatsapp me-1"></i> WhatsApp</span>`;
-    if (l.channel === 'SMS') chanBadge = `<span class="badge bg-warning text-dark"><i class="fa-solid fa-comment-sms me-1"></i> SMS</span>`;
+  // Group logs by attendance event (Student Name + Date + Time)
+  const groupedMap = new Map();
+  logs.forEach(l => {
+    const sName = l.student_name || l.studentName || 'Student';
+    const key = `${sName}_${l.date}_${l.time}`;
+    if (!groupedMap.has(key)) {
+      groupedMap.set(key, {
+        id: l.id || l._id,
+        date: l.date,
+        time: l.time,
+        studentName: sName,
+        parentName: l.parent_name || l.parentName || '',
+        email: l.email || '',
+        phoneNumber: l.phone_number || l.phoneNumber || '',
+        whatsappNumber: l.whatsapp_number || l.whatsappNumber || '',
+        channels: new Set(),
+        status: l.status || 'Sent'
+      });
+    }
+    const item = groupedMap.get(key);
+    if (l.parent_name && l.parent_name !== 'Parent / Guardian') item.parentName = l.parent_name;
+    if (l.email) item.email = l.email;
+    if (l.phone_number) item.phoneNumber = l.phone_number;
+    if (l.whatsapp_number) item.whatsappNumber = l.whatsapp_number;
+    
+    const chStr = l.channel || 'Email, WhatsApp, SMS';
+    chStr.split(',').forEach(c => item.channels.add(c.trim()));
+  });
+
+  const groupedLogs = Array.from(groupedMap.values());
+
+  tbody.innerHTML = groupedLogs.map(item => {
+    let chanBadges = '';
+    if (item.channels.has('Email')) chanBadges += `<span class="badge bg-info me-1"><i class="fa-solid fa-envelope me-1"></i> Email</span>`;
+    if (item.channels.has('WhatsApp')) chanBadges += `<span class="badge bg-success me-1"><i class="fa-brands fa-whatsapp me-1"></i> WhatsApp</span>`;
+    if (item.channels.has('SMS')) chanBadges += `<span class="badge bg-warning text-dark me-1"><i class="fa-solid fa-comment-sms me-1"></i> SMS</span>`;
+    if (!chanBadges) chanBadges = `<span class="badge bg-secondary"><i class="fa-solid fa-bell me-1"></i> Alert</span>`;
 
     let statusBadge = `<span class="badge bg-success"><i class="fa-solid fa-circle-check me-1"></i> Sent</span>`;
-    if (l.status === 'Failed') statusBadge = `<span class="badge bg-danger"><i class="fa-solid fa-circle-xmark me-1"></i> Failed</span>`;
+    if (item.status === 'Failed') statusBadge = `<span class="badge bg-danger"><i class="fa-solid fa-circle-xmark me-1"></i> Failed</span>`;
 
-    const contactInfo = l.email || l.phoneNumber || l.phone_number || l.whatsapp_number || 'Parent Contact';
+    const pName = item.parentName && item.parentName !== 'Parent / Guardian' ? item.parentName : `${item.studentName}'s Parent`;
+    
+    const contactParts = [];
+    if (item.email) contactParts.push(item.email);
+    if (item.phoneNumber) contactParts.push(item.phoneNumber);
+    if (!item.email && !item.phoneNumber && item.whatsappNumber) contactParts.push(item.whatsappNumber);
+    const contactInfo = contactParts.length > 0 ? contactParts.join(' • ') : 'Registered Parent Contact';
 
     return `
       <tr>
-        <td><small>${l.date} ${l.time}</small></td>
-        <td class="fw-bold">${l.student_name || l.studentName}</td>
-        <td>${l.parent_name || l.parentName || 'Parent'}</td>
-        <td>${chanBadge}</td>
+        <td><small>${item.date} ${item.time}</small></td>
+        <td class="fw-bold">${item.studentName}</td>
+        <td><i class="fa-solid fa-user-shield text-accent me-1"></i> ${pName}</td>
+        <td>${chanBadges}</td>
         <td><code>${contactInfo}</code></td>
         <td>${statusBadge}</td>
         <td>
-          <button class="btn btn-secondary btn-sm btn-resend-notif" data-id="${l.id || l._id}">
+          <button class="btn btn-secondary btn-sm btn-resend-notif" data-id="${item.id}">
             <i class="fa-solid fa-paper-plane text-warning me-1"></i> Resend
           </button>
         </td>
